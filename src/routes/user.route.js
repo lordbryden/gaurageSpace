@@ -6,9 +6,9 @@ const {
     getAllUsers,
     getUserById,
     updateUser,
-    deleteUser
+    deleteUser,
+    loginUser
 } = require("../controllers/user.controller");
-
 /**
  * @swagger
  * tags:
@@ -125,6 +125,36 @@ router.get("/:id", getUserById);
  */
 router.put("/:id", updateUser);
 
+
+/**
+ * @swagger
+ * /api/users/login:
+ *   post:
+ *     summary: Login user
+ *     tags: [Users]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - phone
+ *               - password
+ *             properties:
+ *               phone:
+ *                 type: string
+ *                 example: "237651234567"
+ *               password:
+ *                 type: string
+ *                 example: "password123"
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *       400:
+ *         description: Invalid credentials
+ */
+router.post("/login", loginUser);
 /**
  * @swagger
  * /api/users/{id}:
@@ -145,5 +175,6 @@ router.put("/:id", updateUser);
  *         description: User not found
  */
 router.delete("/:id", deleteUser);
+
 
 module.exports = router;

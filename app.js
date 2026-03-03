@@ -20,7 +20,7 @@ const options = {
             description: "API Documentation",
         },
         servers: [{
-            url: "http://localhost:5000",
+            url: "http://localhost:3000",
         }, ],
     },
     apis: ["./src/routes/*.js"], // path to route files
@@ -28,8 +28,7 @@ const options = {
 
 const specs = swaggerJsdoc(options);
 
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
-app.use("/", swaggerUi.serve, swaggerUi.setup(specs));
+app.use("/api-docs/", swaggerUi.serve, swaggerUi.setup(specs));
 
 // Routes
 const userRoutes = require("./src/routes/user.route");
