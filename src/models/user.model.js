@@ -17,6 +17,10 @@ const userSchema = new mongoose.Schema({
         required: [true, "Password is required"],
         minlength: [6, "Password must be at least 6 characters"],
     },
+    cars: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Car'
+    }],
 }, { timestamps: true });
 
 module.exports = mongoose.model("User", userSchema);

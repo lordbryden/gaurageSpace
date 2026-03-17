@@ -32,8 +32,9 @@ app.use("/api-docs/", swaggerUi.serve, swaggerUi.setup(specs));
 
 // Routes
 const userRoutes = require("./src/routes/user.route");
-
+const carRoutes = require("./src/routes/car.route");
 
 app.use("/api/users", userRoutes);
+app.use("/api/cars", carRoutes);
 
 module.exports = app;
