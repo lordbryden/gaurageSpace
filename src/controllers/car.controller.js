@@ -117,3 +117,34 @@ exports.listForRent = async(req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// 7. Update car - PUT /api/cars/:id
+exports.updateCar = async(req, res) => {
+    try {
+        const updates = req.body;
+        const car = await Car.findOne({ _id: req.params.id, owner: req.user._id });
+        if (!car) return res.status(404).json({ success: false, message: 'Car not found or not owned by you' });
+
+        Object.assign(car, updates);
+        await car.save();
+
+        res.json({ success: true, data: car });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 8. Delete car - DELETE /api/cars/:id
+exports.deleteCar = async(req, res) => {
+    try {
+        const car = await Car.findOne({ _id: req.params.id, owner: req.user._id });
+        if (!car) return res.status(404).json({ success: false, message: 'Car not found or not owned by you' });
+
+        await User.findByIdAndUpdate(req.user._id, { $pull: { cars: req.params.id } });
+        await car.remove();
+
+        res.json({ success: true, message: 'Car deleted' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

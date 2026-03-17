@@ -7,7 +7,9 @@ const {
     buyCar,
     sellCar,
     rentCar,
-    listForRent
+    listForRent,
+    updateCar,
+    deleteCar
 } = require('../controllers/car.controller');
 
 /**
@@ -168,5 +170,54 @@ router.post('/rent/:id', auth, rentCar);
  *        description: Car listed for rent
  */
 router.post('/rent-list/:id', auth, listForRent);
+
+/**
+ * @swagger
+ * /api/cars/{id}:
+ *  put:
+ *    summary: Update owned car
+ *    tags: [Cars]
+ *    security:
+ *      - bearerAuth: []
+ *    parameters:
+ *      - in: path
+ *        name: id
+ *        required: true
+ *        schema:
+ *          type: string
+ *    requestBody:
+ *      content:
+ *        application/json:
+ *          schema:
+ *            type: object
+ *            properties:
+ *              make: { type: string }
+ *              model: { type: string }
+ *              # etc...
+ *    responses:
+ *      '200':
+ *        description: Car updated
+ */
+router.put('/:id', auth, updateCar);
+
+/**
+ * @swagger
+ * /api/cars/{id}:
+ *  delete:
+ *    summary: Delete owned car
+ *    tags: [Cars]
+ *    security:
+ *      - bearerAuth: []
+ *    parameters:
+ *      - in: path
+ *        name: id
+ *        required: true
+ *        schema:
+ *          type: string
+ *    responses:
+ *      '200':
+ *        description: Car deleted
+ */
+router.delete('/:id', auth, deleteCar);
 
 module.exports = router;
