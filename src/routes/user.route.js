@@ -129,30 +129,23 @@ router.put("/:id", updateUser);
 /**
  * @swagger
  * /api/users/login:
- *   post:
- *     summary: Login user
- *     tags: [Users]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - phone
- *               - password
- *             properties:
- *               phone:
- *                 type: string
- *                 example: "237651234567"
- *               password:
- *                 type: string
- *                 example: "password123"
- *     responses:
- *       200:
- *         description: Login successful
- *       400:
- *         description: Invalid credentials
+ *  post:
+ *    summary: Login user (returns JWT token for car endpoints)
+ *    tags: [Users]
+ *    requestBody:
+ *      required: true
+ *      content:
+ *        application/json:
+ *          schema:
+ *            type: object
+ *            properties:
+ *              phone:
+ *                type: string
+ *              password:
+ *                type: string
+ *    responses:
+ *      '200':
+ *        description: Login successful with token
  */
 router.post("/login", loginUser);
 /**
