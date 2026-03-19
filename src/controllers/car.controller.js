@@ -1,7 +1,43 @@
 const Car = require('../models/car.model');
 const User = require('../models/user.model');
 
-// 1. Keep car in garage - POST /api/cars/park
+// POST /api/cars - Create new car (for sale, rent, garage)
+exports.createCar = async(req, res) => {
+    try {
+        const { make, model, year, vin, description, price, rentalPrice, status = 'available', inGarage = false, forSale = false, forRent = false } = req.body;
+        const owner = req.user._id;
+
+        const existingCar = await Car.findOne({ vin, owner });
+        if (existingCar) {
+            return res.status(400).json({ success: false, message: 'Car with VIN already exists' });
+        }
+
+        const car = new Car({
+            owner,
+            make,
+            model,
+            year,
+            vin,
+            description,
+            price,
+            rentalPrice,
+            status,
+            inGarage,
+            forSale,
+            forRent,
+            images: Array.isArray(req.files) ? req.files.map(file => `/uploads/cars/${file.filename}`) : (req.file ? [`/uploads/cars/${req.file.filename}`] : [])
+        });
+
+        await car.save();
+        await User.findByIdAndUpdate(owner, { $addToSet: { cars: car._id } });
+
+        res.status(201).json({ success: true, data: car });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// POST /api/cars/park - Legacy garage park
 exports.parkCar = async(req, res) => {
     try {
         const { make, model, year, vin, description, price } = req.body;
@@ -21,7 +57,8 @@ exports.parkCar = async(req, res) => {
                 description,
                 price,
                 status: 'parked',
-                inGarage: true
+                inGarage: true,
+                images: Array.isArray(req.files) ? req.files.map(file => `/uploads/cars/${file.filename}`) : (req.file ? [`/uploads/cars/${req.file.filename}`] : [])
             });
         }
 
@@ -34,11 +71,11 @@ exports.parkCar = async(req, res) => {
     }
 };
 
-// 2. Collect car from garage - POST /api/cars/collect/:id
+// POST /api/cars/collect/:id
 exports.collectCar = async(req, res) => {
     try {
         const car = await Car.findOne({ _id: req.params.id, owner: req.user._id });
-        if (!car) return res.status(404).json({ success: false, message: 'Car not found or not owned by you' });
+        if (!car) return res.status(404).json({ success: false, message: 'Car not yours' });
 
         car.status = 'available';
         car.inGarage = false;
@@ -50,14 +87,13 @@ exports.collectCar = async(req, res) => {
     }
 };
 
-// 3. Buy car - POST /api/cars/buy/:id  (buy available car, transfer owner)
+// POST /api/cars/buy/:id
 exports.buyCar = async(req, res) => {
     try {
         const car = await Car.findOne({ _id: req.params.id, status: 'available', forSale: true });
-        if (!car) return res.status(404).json({ success: false, message: 'Available car for sale not found' });
+        if (!car) return res.status(404).json({ success: false, message: 'Car not available for sale' });
 
         car.owner = req.user._id;
-        car.status = 'available'; // now owned by buyer
         car.forSale = false;
         await car.save();
         await User.findByIdAndUpdate(req.user._id, { $addToSet: { cars: car._id } });
@@ -68,15 +104,15 @@ exports.buyCar = async(req, res) => {
     }
 };
 
-// 4. Sell car - POST /api/cars/sell
+// POST /api/cars/sell/:id
 exports.sellCar = async(req, res) => {
     try {
-        const { carId, price } = req.body;
-        const car = await Car.findOne({ _id: carId, owner: req.user._id });
-        if (!car) return res.status(404).json({ success: false, message: 'Car not found or not owned by you' });
+        const { price } = req.body;
+        const car = await Car.findOne({ _id: req.params.id, owner: req.user._id });
+        if (!car) return res.status(404).json({ success: false, message: 'Car not yours' });
 
         car.forSale = true;
-        car.price = price || car.price;
+        if (price) car.price = price;
         await car.save();
 
         res.json({ success: true, data: car });
@@ -85,14 +121,13 @@ exports.sellCar = async(req, res) => {
     }
 };
 
-// 5. Rent car - POST /api/cars/rent/:id
+// POST /api/cars/rent/:id
 exports.rentCar = async(req, res) => {
     try {
         const car = await Car.findOne({ _id: req.params.id, status: 'available', forRent: true });
-        if (!car) return res.status(404).json({ success: false, message: 'Available car for rent not found' });
+        if (!car) return res.status(404).json({ success: false, message: 'Car not available for rent' });
 
         car.status = 'rented';
-        // Note: renter temp, real impl needs renter ref/duration
         await car.save();
 
         res.json({ success: true, data: car });
@@ -101,15 +136,15 @@ exports.rentCar = async(req, res) => {
     }
 };
 
-// 6. List car for rent - POST /api/cars/rent-list/:id
+// POST /api/cars/rent-list/:id
 exports.listForRent = async(req, res) => {
     try {
         const { rentalPrice } = req.body;
         const car = await Car.findOne({ _id: req.params.id, owner: req.user._id });
-        if (!car) return res.status(404).json({ success: false, message: 'Car not found or not owned by you' });
+        if (!car) return res.status(404).json({ success: false, message: 'Car not yours' });
 
         car.forRent = true;
-        car.rentalPrice = rentalPrice;
+        if (rentalPrice) car.rentalPrice = rentalPrice;
         await car.save();
 
         res.json({ success: true, data: car });
@@ -118,14 +153,13 @@ exports.listForRent = async(req, res) => {
     }
 };
 
-// 7. Update car - PUT /api/cars/:id
+// PUT /api/cars/:id
 exports.updateCar = async(req, res) => {
     try {
-        const updates = req.body;
         const car = await Car.findOne({ _id: req.params.id, owner: req.user._id });
-        if (!car) return res.status(404).json({ success: false, message: 'Car not found or not owned by you' });
+        if (!car) return res.status(404).json({ success: false, message: 'Car not yours' });
 
-        Object.assign(car, updates);
+        Object.assign(car, req.body);
         await car.save();
 
         res.json({ success: true, data: car });
@@ -134,16 +168,42 @@ exports.updateCar = async(req, res) => {
     }
 };
 
-// 8. Delete car - DELETE /api/cars/:id
+// DELETE /api/cars/:id
 exports.deleteCar = async(req, res) => {
     try {
         const car = await Car.findOne({ _id: req.params.id, owner: req.user._id });
-        if (!car) return res.status(404).json({ success: false, message: 'Car not found or not owned by you' });
+        if (!car) return res.status(404).json({ success: false, message: 'Car not yours' });
 
         await User.findByIdAndUpdate(req.user._id, { $pull: { cars: req.params.id } });
-        await car.remove();
+        await car.deleteOne();
 
         res.json({ success: true, message: 'Car deleted' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/cars/available
+exports.getAvailableCars = async(req, res) => {
+    try {
+        const { page = 1, limit = 10, forSale, forRent, status = 'available' } = req.query;
+        const query = { status: status.split(',') };
+        if (forSale !== undefined) query.forSale = forSale === 'true';
+        if (forRent !== undefined) query.forRent = forRent === 'true';
+
+        const cars = await Car.find(query)
+            .populate('owner', 'name phone')
+            .limit(limit * 1)
+            .skip((page - 1) * limit)
+            .sort({ createdAt: -1 });
+
+        const total = await Car.countDocuments(query);
+
+        res.json({
+            success: true,
+            data: cars,
+            pagination: { page: +page, limit: +limit, total, pages: Math.ceil(total / limit) }
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
+const upload = require('../middleware/multer');
 const {
+    createCar,
     parkCar,
     collectCar,
     buyCar,
@@ -9,7 +11,8 @@ const {
     rentCar,
     listForRent,
     updateCar,
-    deleteCar
+    deleteCar,
+    getAvailableCars
 } = require('../controllers/car.controller');
 
 /**
@@ -26,16 +29,16 @@ const {
 
 /**
  * @swagger
- * /api/cars/park:
+ * /api/cars:
  *  post:
- *    summary: Park/keep car in garage
+ *    summary: Create new car (for sale/rent/normal) with images
  *    tags: [Cars]
  *    security:
  *      - bearerAuth: []
  *    requestBody:
  *      required: true
  *      content:
- *        application/json:
+ *        'multipart/form-data':
  *          schema:
  *            type: object
  *            properties:
@@ -51,11 +54,65 @@ const {
  *                type: string
  *              price:
  *                type: number
+ *              rentalPrice:
+ *                type: number
+ *              status:
+ *                type: string
+ *                enum: [available, parked, rented, sold]
+ *              forSale:
+ *                type: boolean
+ *              forRent:
+ *                type: boolean
+ *              inGarage:
+ *                type: boolean
+ *              images:
+ *                type: array
+ *                items:
+ *                  type: string
+ *                  format: binary
  *    responses:
  *      '201':
- *        description: Car parked
+ *        description: Car created with images
  */
-router.post('/park', auth, parkCar);
+router.post('/', upload.array('images', 5), auth, createCar);
+
+/**
+ * @swagger
+ * /api/cars/park:
+ *  post:
+ *    summary: Park/keep car in garage with images
+ *    tags: [Cars]
+ *    security:
+ *      - bearerAuth: []
+ *    requestBody:
+ *      required: true
+ *      content:
+ *        'multipart/form-data':
+ *          schema:
+ *            type: object
+ *            properties:
+ *              make:
+ *                type: string
+ *              model:
+ *                type: string
+ *              year:
+ *                type: number
+ *              vin:
+ *                type: string
+ *              description:
+ *                type: string
+ *              price:
+ *                type: number
+ *              images:
+ *                type: array
+ *                items:
+ *                  type: string
+ *                  format: binary
+ *    responses:
+ *      '201':
+ *        description: Car parked with images
+ */
+router.post('/park', upload.array('images', 1), auth, parkCar);
 
 /**
  * @swagger
@@ -99,28 +156,31 @@ router.post('/buy/:id', auth, buyCar);
 
 /**
  * @swagger
- * /api/cars/sell:
+ * /api/cars/sell/{id}:
  *  post:
- *    summary: Put owned car for sale
+ *    summary: Put owned car for sale (set price)
  *    tags: [Cars]
  *    security:
  *      - bearerAuth: []
+ *    parameters:
+ *      - in: path
+ *        name: id
+ *        required: true
+ *        schema:
+ *          type: string
  *    requestBody:
- *      required: true
  *      content:
  *        application/json:
  *          schema:
  *            type: object
  *            properties:
- *              carId:
- *                type: string
  *              price:
  *                type: number
  *    responses:
  *      '200':
  *        description: Car listed for sale
  */
-router.post('/sell', auth, sellCar);
+router.post('/sell/:id', auth, sellCar);
 
 /**
  * @swagger
@@ -219,5 +279,43 @@ router.put('/:id', auth, updateCar);
  *        description: Car deleted
  */
 router.delete('/:id', auth, deleteCar);
+
+/**
+ * @swagger
+ * /api/cars/available:
+ *  get:
+ *    summary: List available cars (for sale/rent)
+ *    tags: [Cars]
+ *    security:
+ *      - bearerAuth: []
+ *    parameters:
+ *      - in: query
+ *        name: status
+ *        schema:
+ *          type: string
+ *          example: available
+ *      - in: query
+ *        name: forSale
+ *        schema:
+ *          type: boolean
+ *      - in: query
+ *        name: forRent
+ *        schema:
+ *          type: boolean
+ *      - in: query
+ *        name: page
+ *        schema:
+ *          type: number
+ *          default: 1
+ *      - in: query
+ *        name: limit
+ *        schema:
+ *          type: number
+ *          default: 10
+ *    responses:
+ *      '200':
+ *        description: List of available cars
+ */
+router.get('/available', auth, getAvailableCars);
 
 module.exports = router;

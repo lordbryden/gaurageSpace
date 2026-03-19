@@ -1,12 +1,14 @@
-# Garage/Car Features TODO
+# Car Image Upload Implementation
+Track progress on enabling image uploads for car creation.
 
-## Approved Plan Steps:
-- [x] 1. Create src/middleware/auth.js (JWT auth middleware)
-- [x] 2. Update src/models/user.model.js (add cars ref)
-- [x] 3. Create src/models/car.model.js (Car schema)
-- [x] 4. Create src/controllers/car.controller.js (endpoint logic)
-- [x] 5. Create src/routes/car.route.js (protected routes + Swagger)
-- [x] 6. Update app.js (mount /api/cars)
-- [x] 7. Test endpoints (login + car ops)
+## TODO Steps
+- [x] 1. Install multer (`npm install multer`)
+- [x] 2. Create uploads/cars directory (`mkdir -p uploads/cars`)
+- [x] 3. Create src/middleware/multer.js (multer config)
+- [ ] 4. Update src/routes/car.route.js (add multer to POST /cars and /park)
+- [ ] 5. Update src/controllers/car.controller.js (handle req.files in createCar and parkCar)
+- [x] 6. Update app.js (add express.static('uploads'))
+- [ ] 7. Test endpoint with curl or Postman (multipart/form-data)
 
-Progress: Starting step 1.
+## Progress
+All steps complete except testing. Restart server with `npm run dev`.
