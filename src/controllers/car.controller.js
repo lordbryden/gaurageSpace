@@ -25,7 +25,7 @@ exports.createCar = async(req, res) => {
             inGarage,
             forSale,
             forRent,
-            images: Array.isArray(req.files) ? req.files.map(file => `/uploads/cars/${file.filename}`) : (req.file ? [`/uploads/cars/${req.file.filename}`] : [])
+            images: Array.isArray(req.files) ? req.files.map(file => `/cars/${file.filename}`) : (req.file ? [`/cars/${req.file.filename}`] : [])
         });
 
         await car.save();
@@ -58,7 +58,7 @@ exports.parkCar = async(req, res) => {
                 price,
                 status: 'parked',
                 inGarage: true,
-                images: Array.isArray(req.files) ? req.files.map(file => `/uploads/cars/${file.filename}`) : (req.file ? [`/uploads/cars/${req.file.filename}`] : [])
+                images: Array.isArray(req.files) ? req.files.map(file => `/cars/${file.filename}`) : (req.file ? [`/cars/${req.file.filename}`] : [])
             });
         }
 
