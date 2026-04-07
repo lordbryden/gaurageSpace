@@ -208,3 +208,55 @@ exports.getAvailableCars = async(req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// GET /api/cars/user/:userId/sale - User's cars for sale
+exports.getUserSaleCars = async(req, res) => {
+    try {
+        const { userId } = req.params;
+        const { page = 1, limit = 10 } = req.query;
+
+        const query = { owner: userId, forSale: true };
+
+        const cars = await Car.find(query)
+            .populate('owner', 'name phone')
+            .limit(limit * 1)
+            .skip((page - 1) * limit)
+            .sort({ createdAt: -1 });
+
+        const total = await Car.countDocuments(query);
+
+        res.json({
+            success: true,
+            data: cars,
+            pagination: { page: +page, limit: +limit, total, pages: Math.ceil(total / limit) }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/cars/user/:userId/rent - User's cars for rent
+exports.getUserRentCars = async(req, res) => {
+    try {
+        const { userId } = req.params;
+        const { page = 1, limit = 10 } = req.query;
+
+        const query = { owner: userId, forRent: true };
+
+        const cars = await Car.find(query)
+            .populate('owner', 'name phone')
+            .limit(limit * 1)
+            .skip((page - 1) * limit)
+            .sort({ createdAt: -1 });
+
+        const total = await Car.countDocuments(query);
+
+        res.json({
+            success: true,
+            data: cars,
+            pagination: { page: +page, limit: +limit, total, pages: Math.ceil(total / limit) }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

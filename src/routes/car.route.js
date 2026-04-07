@@ -12,7 +12,9 @@ const {
     listForRent,
     updateCar,
     deleteCar,
-    getAvailableCars
+    getAvailableCars,
+    getUserSaleCars,
+    getUserRentCars
 } = require('../controllers/car.controller');
 
 /**
@@ -279,6 +281,66 @@ router.put('/:id', auth, updateCar);
  *        description: Car deleted
  */
 router.delete('/:id', auth, deleteCar);
+
+/**
+ * @swagger
+ * /api/cars/user/{userId}/sale:
+ *  get:
+ *    summary: List user's cars for sale
+ *    tags: [Cars]
+ *    security:
+ *      - bearerAuth: []
+ *    parameters:
+ *      - in: path
+ *        name: userId
+ *        required: true
+ *        schema:
+ *          type: string
+ *      - in: query
+ *        name: page
+ *        schema:
+ *          type: number
+ *          default: 1
+ *      - in: query
+ *        name: limit
+ *        schema:
+ *          type: number
+ *          default: 10
+ *    responses:
+ *      '200':
+ *        description: User's sale cars
+ */
+router.get('/user/:userId/sale', auth, getUserSaleCars);
+
+/**
+ * @swagger
+ * /api/cars/user/{userId}/rent:
+ *  get:
+ *    summary: List user's cars for rent
+ *    tags: [Cars]
+ *    security:
+ *      - bearerAuth: []
+ *    parameters:
+ *      - in: path
+ *        name: userId
+ *        required: true
+ *        schema:
+ *          type: string
+ *      - in: query
+ *        name: page
+ *        schema:
+ *          type: number
+ *          default: 1
+ *      - in: query
+ *        name: limit
+ *        schema:
+ *          type: number
+ *          default: 10
+ *    responses:
+ *      '200':
+ *        description: User's rent cars
+ */
+router.get('/user/:userId/rent', auth, getUserRentCars);
 
 /**
  * @swagger
