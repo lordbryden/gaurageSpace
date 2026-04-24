@@ -1,7 +1,11 @@
 const User = require("../models/user.model");
+const Car = require("../models/car.model");
 const { validationResult } = require("express-validator");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
+
+const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 
 exports.registerUser = async(req, res) => {
@@ -37,6 +41,54 @@ exports.getAllUsers = async(req, res) => {
     try {
         const users = await User.find({}, "-password"); // exclude password
         res.status(200).json({ success: true, data: users });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/users/search — search by name (partial, case-insensitive) or id.
+// Returns a paginated list of users with their cars populated, so the UI can
+// show matching people and preview their cars in one round trip.
+exports.searchUsers = async(req, res) => {
+    try {
+        const { id, name, q, page = 1, limit = 10 } = req.query;
+        const term = name || q;
+
+        const query = {};
+
+        if (id) {
+            if (!mongoose.Types.ObjectId.isValid(id)) {
+                return res.status(400).json({ success: false, message: "Invalid user id" });
+            }
+            query._id = id;
+        } else if (term) {
+            query.name = { $regex: escapeRegex(term), $options: "i" };
+        } else {
+            return res.status(400).json({ success: false, message: "Provide 'name' or 'id' to search" });
+        }
+
+        const pageNum = Math.max(1, Number(page));
+        const limitNum = Math.max(1, Number(limit));
+
+        const [users, total] = await Promise.all([
+            User.find(query, "-password -activeToken")
+            .populate("cars")
+            .sort({ name: 1, createdAt: -1 })
+            .skip((pageNum - 1) * limitNum)
+            .limit(limitNum),
+            User.countDocuments(query)
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: users,
+            pagination: {
+                page: pageNum,
+                limit: limitNum,
+                total,
+                pages: Math.ceil(total / limitNum)
+            }
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -109,10 +161,15 @@ exports.loginUser = async(req, res) => {
             });
         }
 
-        // Create token
+        // Create non-expiring token. Persisting it on the user ensures only the
+        // most recent login is valid — any previous session (another device) is
+        // invalidated, and logout clears it entirely.
         const token = jwt.sign({ id: user._id, phone: user.phone },
-            process.env.JWT_SECRET, { expiresIn: "1d" }
+            process.env.JWT_SECRET
         );
+
+        user.activeToken = token;
+        await user.save();
 
         res.status(200).json({
             success: true,
@@ -130,6 +187,142 @@ exports.loginUser = async(req, res) => {
             success: false,
             message: error.message
         });
+    }
+};
+
+// RESET password — OTP is verified on the frontend, so here we only accept
+// the new password and update it. Clearing activeToken logs out any device
+// that was still signed in with the old credentials.
+exports.resetPassword = async(req, res) => {
+    try {
+        const { phone, password, repeatPassword } = req.body;
+
+        if (!phone || !password || !repeatPassword) {
+            return res.status(400).json({ success: false, message: "phone, password and repeatPassword are required" });
+        }
+        if (password.length < 6) {
+            return res.status(400).json({ success: false, message: "Password must be at least 6 characters" });
+        }
+        if (password !== repeatPassword) {
+            return res.status(400).json({ success: false, message: "Passwords do not match" });
+        }
+
+        const user = await User.findOne({ phone });
+        if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+        user.password = await bcrypt.hash(password, 10);
+        user.activeToken = null;
+        await user.save();
+
+        res.status(200).json({ success: true, message: "Password reset successfully. Please log in again." });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// PUT /api/users/me/details — upload or replace the authenticated user's
+// profile image / ID card images. Only the fields included in the multipart
+// request are updated; the rest are left untouched. Scoped to req.user so a
+// caller can never modify someone else's documents.
+exports.updateMyDetails = async(req, res) => {
+    try {
+        const update = {};
+
+        if (req.files && req.files.idCardFront && req.files.idCardFront[0]) {
+            update.idCardFront = `/users/${req.files.idCardFront[0].filename}`;
+        }
+        if (req.files && req.files.idCardBack && req.files.idCardBack[0]) {
+            update.idCardBack = `/users/${req.files.idCardBack[0].filename}`;
+        }
+        if (req.files && req.files.image && req.files.image[0]) {
+            update.image = `/users/${req.files.image[0].filename}`;
+        }
+
+        if (Object.keys(update).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Provide at least one of: idCardFront, idCardBack, image"
+            });
+        }
+
+        const updated = await User.findByIdAndUpdate(
+            req.user._id,
+            update, { new: true, runValidators: true }
+        ).select("-password -activeToken");
+
+        res.status(200).json({ success: true, data: updated });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/users/wishlist — current user's wishlist with cars populated
+exports.getWishlist = async(req, res) => {
+    try {
+        const user = await User.findById(req.user._id, "wishlist")
+            .populate({
+                path: "wishlist",
+                populate: { path: "owner", select: "name phone" }
+            });
+        res.status(200).json({ success: true, data: user ? user.wishlist : [] });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// POST /api/users/wishlist/:carId — idempotent via $addToSet
+exports.addToWishlist = async(req, res) => {
+    try {
+        const { carId } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(carId)) {
+            return res.status(400).json({ success: false, message: "Invalid car id" });
+        }
+
+        const carExists = await Car.exists({ _id: carId });
+        if (!carExists) return res.status(404).json({ success: false, message: "Car not found" });
+
+        const updated = await User.findByIdAndUpdate(
+            req.user._id, { $addToSet: { wishlist: carId } }, { new: true, select: "wishlist" }
+        ).populate({
+            path: "wishlist",
+            populate: { path: "owner", select: "name phone" }
+        });
+
+        res.status(200).json({ success: true, message: "Added to wishlist", data: updated.wishlist });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// DELETE /api/users/wishlist/:carId — idempotent via $pull
+exports.removeFromWishlist = async(req, res) => {
+    try {
+        const { carId } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(carId)) {
+            return res.status(400).json({ success: false, message: "Invalid car id" });
+        }
+
+        const updated = await User.findByIdAndUpdate(
+            req.user._id, { $pull: { wishlist: carId } }, { new: true, select: "wishlist" }
+        ).populate({
+            path: "wishlist",
+            populate: { path: "owner", select: "name phone" }
+        });
+
+        res.status(200).json({ success: true, message: "Removed from wishlist", data: updated.wishlist });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// LOGOUT user — clears the active token so it can no longer be used
+exports.logoutUser = async(req, res) => {
+    try {
+        req.user.activeToken = null;
+        await req.user.save();
+        res.status(200).json({ success: true, message: "Logged out" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 

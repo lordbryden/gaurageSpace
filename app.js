@@ -43,8 +43,10 @@ app.use("/api-docs/", swaggerUi.serve, swaggerUi.setup(specs));
 // Routes
 const userRoutes = require("./src/routes/user.route");
 const carRoutes = require("./src/routes/car.route");
+const advertRoutes = require("./src/routes/advert.route");
 
 app.use("/api/users", userRoutes);
 app.use("/api/cars", carRoutes);
+app.use("/api/adverts", advertRoutes);
 
 module.exports = app;

@@ -15,6 +15,12 @@ const auth = async(req, res, next) => {
             return res.status(401).json({ success: false, message: 'Token invalid' });
         }
 
+        // Enforce single active session: token must match the one stored at
+        // the last login. Another-device login or logout clears/replaces it.
+        if (user.activeToken !== token) {
+            return res.status(401).json({ success: false, message: 'Session expired, please log in again' });
+        }
+
         req.user = user;
         next();
     } catch (error) {

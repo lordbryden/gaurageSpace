@@ -21,6 +21,26 @@ const userSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Car'
     }],
+    wishlist: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Car'
+    }],
+    activeToken: {
+        type: String,
+        default: null,
+    },
+    idCardFront: {
+        type: String,
+        default: null,
+    },
+    idCardBack: {
+        type: String,
+        default: null,
+    },
+    image: {
+        type: String,
+        default: null,
+    },
 }, { timestamps: true });
 
 module.exports = mongoose.model("User", userSchema);

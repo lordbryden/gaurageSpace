@@ -14,7 +14,8 @@ const {
     deleteCar,
     getAvailableCars,
     getUserSaleCars,
-    getUserRentCars
+    getUserRentCars,
+    searchCars
 } = require('../controllers/car.controller');
 
 /**
@@ -286,7 +287,7 @@ router.delete('/:id', auth, deleteCar);
  * @swagger
  * /api/cars/user/{userId}/sale:
  *  get:
- *    summary: List user's cars for sale
+ *    summary: List user's cars for sale (supports filtering)
  *    tags: [Cars]
  *    security:
  *      - bearerAuth: []
@@ -296,6 +297,32 @@ router.delete('/:id', auth, deleteCar);
  *        required: true
  *        schema:
  *          type: string
+ *      - in: query
+ *        name: make
+ *        schema: { type: string }
+ *        description: Case-insensitive partial match (e.g. "bmw" matches "BMW")
+ *      - in: query
+ *        name: model
+ *        schema: { type: string }
+ *      - in: query
+ *        name: year
+ *        schema: { type: number }
+ *      - in: query
+ *        name: yearMin
+ *        schema: { type: number }
+ *      - in: query
+ *        name: yearMax
+ *        schema: { type: number }
+ *      - in: query
+ *        name: priceMin
+ *        schema: { type: number }
+ *      - in: query
+ *        name: priceMax
+ *        schema: { type: number }
+ *      - in: query
+ *        name: q
+ *        schema: { type: string }
+ *        description: Free-text search across make, model, description
  *      - in: query
  *        name: page
  *        schema:
@@ -316,7 +343,7 @@ router.get('/user/:userId/sale', auth, getUserSaleCars);
  * @swagger
  * /api/cars/user/{userId}/rent:
  *  get:
- *    summary: List user's cars for rent
+ *    summary: List user's cars for rent (supports filtering)
  *    tags: [Cars]
  *    security:
  *      - bearerAuth: []
@@ -326,6 +353,31 @@ router.get('/user/:userId/sale', auth, getUserSaleCars);
  *        required: true
  *        schema:
  *          type: string
+ *      - in: query
+ *        name: make
+ *        schema: { type: string }
+ *      - in: query
+ *        name: model
+ *        schema: { type: string }
+ *      - in: query
+ *        name: year
+ *        schema: { type: number }
+ *      - in: query
+ *        name: yearMin
+ *        schema: { type: number }
+ *      - in: query
+ *        name: yearMax
+ *        schema: { type: number }
+ *      - in: query
+ *        name: priceMin
+ *        schema: { type: number }
+ *      - in: query
+ *        name: priceMax
+ *        schema: { type: number }
+ *      - in: query
+ *        name: q
+ *        schema: { type: string }
+ *        description: Free-text search across make, model, description
  *      - in: query
  *        name: page
  *        schema:
@@ -346,7 +398,7 @@ router.get('/user/:userId/rent', auth, getUserRentCars);
  * @swagger
  * /api/cars/available:
  *  get:
- *    summary: List available cars (for sale/rent)
+ *    summary: List available cars (for sale/rent) with filtering
  *    tags: [Cars]
  *    security:
  *      - bearerAuth: []
@@ -365,6 +417,32 @@ router.get('/user/:userId/rent', auth, getUserRentCars);
  *        schema:
  *          type: boolean
  *      - in: query
+ *        name: make
+ *        schema: { type: string }
+ *        description: Case-insensitive partial match (e.g. "bmw" matches "BMW")
+ *      - in: query
+ *        name: model
+ *        schema: { type: string }
+ *      - in: query
+ *        name: year
+ *        schema: { type: number }
+ *      - in: query
+ *        name: yearMin
+ *        schema: { type: number }
+ *      - in: query
+ *        name: yearMax
+ *        schema: { type: number }
+ *      - in: query
+ *        name: priceMin
+ *        schema: { type: number }
+ *      - in: query
+ *        name: priceMax
+ *        schema: { type: number }
+ *      - in: query
+ *        name: q
+ *        schema: { type: string }
+ *        description: Free-text search across make, model, description
+ *      - in: query
  *        name: page
  *        schema:
  *          type: number
@@ -379,5 +457,71 @@ router.get('/user/:userId/rent', auth, getUserRentCars);
  *        description: List of available cars
  */
 router.get('/available', auth, getAvailableCars);
+
+/**
+ * @swagger
+ * /api/cars/search:
+ *  get:
+ *    summary: Search cars (text + faceted filters, returns facet counts for dropdown UIs)
+ *    description: >
+ *      Returns matching cars plus a `facets` object listing distinct makes, models and years
+ *      present in the result set. Use `q` for free-text search (e.g. "toyota"), and
+ *      `make`/`model` (comma-separated for multi-select) for dropdown-driven narrowing.
+ *    tags: [Cars]
+ *    security:
+ *      - bearerAuth: []
+ *    parameters:
+ *      - in: query
+ *        name: q
+ *        schema: { type: string }
+ *        description: Free-text — matches make, model or description (case-insensitive partial)
+ *      - in: query
+ *        name: make
+ *        schema: { type: string }
+ *        description: Exact make(s). Comma-separate for multi-select, e.g. "Toyota,Honda"
+ *      - in: query
+ *        name: model
+ *        schema: { type: string }
+ *        description: Exact model(s). Comma-separated supported.
+ *      - in: query
+ *        name: status
+ *        schema: { type: string }
+ *        description: Comma-separated list, e.g. "available,rented"
+ *      - in: query
+ *        name: forSale
+ *        schema: { type: boolean }
+ *      - in: query
+ *        name: forRent
+ *        schema: { type: boolean }
+ *      - in: query
+ *        name: yearMin
+ *        schema: { type: number }
+ *      - in: query
+ *        name: yearMax
+ *        schema: { type: number }
+ *      - in: query
+ *        name: priceMin
+ *        schema: { type: number }
+ *      - in: query
+ *        name: priceMax
+ *        schema: { type: number }
+ *      - in: query
+ *        name: sort
+ *        schema:
+ *          type: string
+ *          enum: [recent, priceAsc, priceDesc, yearAsc, yearDesc]
+ *          default: recent
+ *      - in: query
+ *        name: page
+ *        schema: { type: number, default: 1 }
+ *      - in: query
+ *        name: limit
+ *        schema: { type: number, default: 20 }
+ *    responses:
+ *      '200':
+ *        description: |
+ *          Shape: { success, data: Car[], facets: { makes: [{make, count}], models: [{make, model, count}], years: [{year, count}] }, pagination }
+ */
+router.get('/search', auth, searchCars);
 
 module.exports = router;
