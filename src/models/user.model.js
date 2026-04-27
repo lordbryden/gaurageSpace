@@ -41,6 +41,11 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: null,
     },
+    verified: {
+        type: String,
+        enum: ['unverified', 'pending', 'verified'],
+        default: 'unverified',
+    },
 }, { timestamps: true });
 
 module.exports = mongoose.model("User", userSchema);

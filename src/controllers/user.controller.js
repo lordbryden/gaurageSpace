@@ -7,6 +7,23 @@ const mongoose = require("mongoose");
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// Canonical shape returned by login/register. Explicitly falls back to null
+// for the optional image fields so clients always receive every key — even
+// for older docs saved before the fields existed — rather than having to
+// check for missing properties. Cars and wishlist are intentionally excluded
+// so clients fetch them via their dedicated endpoints.
+const buildUserResponse = (user) => ({
+    id: user._id,
+    name: user.name,
+    phone: user.phone,
+    image: user.image == null ? null : user.image,
+    idCardFront: user.idCardFront == null ? null : user.idCardFront,
+    idCardBack: user.idCardBack == null ? null : user.idCardBack,
+    verified: user.verified || 'unverified',
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+});
+
 
 exports.registerUser = async(req, res) => {
     const errors = validationResult(req);
@@ -27,10 +44,21 @@ exports.registerUser = async(req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-
         const newUser = await User.create({ name, phone, password: hashedPassword });
 
-        res.status(201).json({ success: true, data: { id: newUser._id, name: newUser.name, phone: newUser.phone } });
+        // Auto-login: mint the same kind of non-expiring token login does and
+        // persist it as the user's activeToken so later logins/logouts can
+        // invalidate the session the same way.
+        const token = jwt.sign({ id: newUser._id, phone: newUser.phone }, process.env.JWT_SECRET);
+        newUser.activeToken = token;
+        await newUser.save();
+
+        res.status(201).json({
+            success: true,
+            message: "Registered successfully",
+            token,
+            user: buildUserResponse(newUser)
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -175,11 +203,7 @@ exports.loginUser = async(req, res) => {
             success: true,
             message: "Login successful",
             token,
-            user: {
-                id: user._id,
-                name: user.name,
-                phone: user.phone
-            }
+            user: buildUserResponse(user)
         });
 
     } catch (error) {
