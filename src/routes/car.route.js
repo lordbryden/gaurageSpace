@@ -2,6 +2,16 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const upload = require('../middleware/multer');
+
+// All file fields the create/update endpoints can receive.
+const carFiles = upload.fields([
+    { name: 'images', maxCount: 5 },
+    { name: 'carteGrise', maxCount: 1 },
+    { name: 'customerDocument', maxCount: 1 },
+    { name: 'salesCertificate', maxCount: 1 },
+    { name: 'idCardFront', maxCount: 1 },
+    { name: 'idCardBack', maxCount: 1 },
+]);
 const {
     createCar,
     parkCar,
@@ -34,7 +44,7 @@ const {
  * @swagger
  * /api/cars:
  *  post:
- *    summary: Create new car (for sale/rent/normal) with images
+ *    summary: Create new car (for sale/rent/normal) with images, docs and specs
  *    tags: [Cars]
  *    security:
  *      - bearerAuth: []
@@ -45,39 +55,56 @@ const {
  *          schema:
  *            type: object
  *            properties:
- *              make:
- *                type: string
- *              model:
- *                type: string
- *              year:
- *                type: number
- *              vin:
- *                type: string
- *              description:
- *                type: string
- *              price:
- *                type: number
- *              rentalPrice:
- *                type: number
+ *              make: { type: string }
+ *              model: { type: string }
+ *              year: { type: number }
+ *              vin: { type: string }
+ *              description: { type: string }
+ *              price: { type: number }
+ *              rentalPrice: { type: number }
  *              status:
  *                type: string
  *                enum: [available, parked, rented, sold]
- *              forSale:
- *                type: boolean
- *              forRent:
- *                type: boolean
- *              inGarage:
- *                type: boolean
+ *              forSale: { type: boolean }
+ *              forRent: { type: boolean }
+ *              inGarage: { type: boolean }
+ *              fuelType:
+ *                type: string
+ *                enum: [petrol, diesel, electric, hybrid, lpg, cng, other]
+ *              transmission:
+ *                type: string
+ *                enum: [manual, automatic]
+ *              color: { type: string }
+ *              bodyType: { type: string }
+ *              mileage: { type: number }
  *              images:
  *                type: array
- *                items:
- *                  type: string
- *                  format: binary
+ *                items: { type: string, format: binary }
+ *              carteGrise:
+ *                type: string
+ *                format: binary
+ *                description: Vehicle registration document (image or PDF)
+ *              customerDocument:
+ *                type: string
+ *                format: binary
+ *                description: Customer document (image or PDF)
+ *              salesCertificate:
+ *                type: string
+ *                format: binary
+ *                description: Sales certificate (image or PDF)
+ *              idCardFront:
+ *                type: string
+ *                format: binary
+ *                description: Owner ID card front. Falls back to the user's profile if omitted.
+ *              idCardBack:
+ *                type: string
+ *                format: binary
+ *                description: Owner ID card back. Falls back to the user's profile if omitted.
  *    responses:
  *      '201':
- *        description: Car created with images
+ *        description: Car created
  */
-router.post('/', upload.array('images', 5), auth, createCar);
+router.post('/', carFiles, auth, createCar);
 
 /**
  * @swagger
@@ -238,7 +265,7 @@ router.post('/rent-list/:id', auth, listForRent);
  * @swagger
  * /api/cars/{id}:
  *  put:
- *    summary: Update owned car
+ *    summary: Update owned car (multipart — new images appended, new docs replace old)
  *    tags: [Cars]
  *    security:
  *      - bearerAuth: []
@@ -250,18 +277,34 @@ router.post('/rent-list/:id', auth, listForRent);
  *          type: string
  *    requestBody:
  *      content:
- *        application/json:
+ *        'multipart/form-data':
  *          schema:
  *            type: object
  *            properties:
  *              make: { type: string }
  *              model: { type: string }
- *              # etc...
+ *              year: { type: number }
+ *              description: { type: string }
+ *              price: { type: number }
+ *              rentalPrice: { type: number }
+ *              fuelType: { type: string, enum: [petrol, diesel, electric, hybrid, lpg, cng, other] }
+ *              transmission: { type: string, enum: [manual, automatic] }
+ *              color: { type: string }
+ *              bodyType: { type: string }
+ *              mileage: { type: number }
+ *              images:
+ *                type: array
+ *                items: { type: string, format: binary }
+ *              carteGrise: { type: string, format: binary }
+ *              customerDocument: { type: string, format: binary }
+ *              salesCertificate: { type: string, format: binary }
+ *              idCardFront: { type: string, format: binary }
+ *              idCardBack: { type: string, format: binary }
  *    responses:
  *      '200':
  *        description: Car updated
  */
-router.put('/:id', auth, updateCar);
+router.put('/:id', carFiles, auth, updateCar);
 
 /**
  * @swagger
@@ -456,7 +499,7 @@ router.get('/user/:userId/rent', auth, getUserRentCars);
  *      '200':
  *        description: List of available cars
  */
-router.get('/available', auth, getAvailableCars);
+router.get('/available', getAvailableCars);
 
 /**
  * @swagger
@@ -522,6 +565,6 @@ router.get('/available', auth, getAvailableCars);
  *        description: |
  *          Shape: { success, data: Car[], facets: { makes: [{make, count}], models: [{make, model, count}], years: [{year, count}] }, pagination }
  */
-router.get('/search', auth, searchCars);
+router.get('/search', searchCars);
 
 module.exports = router;

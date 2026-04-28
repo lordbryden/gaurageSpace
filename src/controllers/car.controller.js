@@ -35,16 +35,57 @@ const buildCarFilter = (q) => {
     return filter;
 };
 
+// req.files comes from multer.fields() as { fieldname: [files] } for the
+// create/update routes, or from multer.array('images') as a flat array for
+// the legacy parkCar route. These helpers handle both shapes.
+const firstUploadedPath = (req, field) => {
+    const files = req.files;
+    if (files && !Array.isArray(files) && files[field] && files[field][0]) {
+        return `/cars/${files[field][0].filename}`;
+    }
+    return null;
+};
+
+const uploadedImagePaths = (req) => {
+    const files = req.files;
+    if (Array.isArray(files)) return files.map((f) => `/cars/${f.filename}`);
+    if (files && Array.isArray(files.images)) return files.images.map((f) => `/cars/${f.filename}`);
+    if (req.file) return [`/cars/${req.file.filename}`];
+    return [];
+};
+
 // POST /api/cars - Create new car (for sale, rent, garage)
 exports.createCar = async(req, res) => {
     try {
-        const { make, model, year, vin, description, price, rentalPrice, status = 'available', inGarage = false, forSale = false, forRent = false } = req.body;
+        const {
+            make,
+            model,
+            year,
+            vin,
+            description,
+            price,
+            rentalPrice,
+            status = 'available',
+            inGarage = false,
+            forSale = false,
+            forRent = false,
+            fuelType,
+            transmission,
+            color,
+            bodyType,
+            mileage,
+        } = req.body;
         const owner = req.user._id;
 
         const existingCar = await Car.findOne({ vin, owner });
         if (existingCar) {
             return res.status(400).json({ success: false, message: 'Car with VIN already exists' });
         }
+
+        // ID card: prefer a per-car upload, otherwise inherit from the user's
+        // profile if they've already provided one.
+        const idCardFront = firstUploadedPath(req, 'idCardFront') || req.user.idCardFront || null;
+        const idCardBack = firstUploadedPath(req, 'idCardBack') || req.user.idCardBack || null;
 
         const car = new Car({
             owner,
@@ -59,7 +100,17 @@ exports.createCar = async(req, res) => {
             inGarage,
             forSale,
             forRent,
-            images: Array.isArray(req.files) ? req.files.map(file => `/cars/${file.filename}`) : (req.file ? [`/cars/${req.file.filename}`] : [])
+            fuelType: fuelType || null,
+            transmission: transmission || null,
+            color: color || null,
+            bodyType: bodyType || null,
+            mileage: mileage !== undefined && mileage !== '' ? Number(mileage) : null,
+            images: uploadedImagePaths(req),
+            carteGrise: firstUploadedPath(req, 'carteGrise'),
+            customerDocument: firstUploadedPath(req, 'customerDocument'),
+            salesCertificate: firstUploadedPath(req, 'salesCertificate'),
+            idCardFront,
+            idCardBack,
         });
 
         await car.save();
@@ -92,7 +143,7 @@ exports.parkCar = async(req, res) => {
                 price,
                 status: 'parked',
                 inGarage: true,
-                images: Array.isArray(req.files) ? req.files.map(file => `/cars/${file.filename}`) : (req.file ? [`/cars/${req.file.filename}`] : [])
+                images: uploadedImagePaths(req),
             });
         }
 
@@ -194,8 +245,20 @@ exports.updateCar = async(req, res) => {
         if (!car) return res.status(404).json({ success: false, message: 'Car not yours' });
 
         Object.assign(car, req.body);
-        await car.save();
 
+        // Append newly uploaded images to the existing list rather than
+        // replacing — matches the advert update behavior.
+        const newImages = uploadedImagePaths(req);
+        if (newImages.length) car.images.push(...newImages);
+
+        // Replace doc fields if a new file was uploaded for them.
+        const docFields = ['carteGrise', 'customerDocument', 'salesCertificate', 'idCardFront', 'idCardBack'];
+        for (const field of docFields) {
+            const newPath = firstUploadedPath(req, field);
+            if (newPath) car[field] = newPath;
+        }
+
+        await car.save();
         res.json({ success: true, data: car });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

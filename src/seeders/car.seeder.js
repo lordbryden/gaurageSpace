@@ -15,16 +15,16 @@ const SEED_USER = {
 };
 
 const CAR_TEMPLATES = [
-    { make: "Toyota", model: "Corolla", year: 2020, price: 18000, rentalPrice: 60, status: "available", forSale: true, forRent: false, inGarage: false, description: "Reliable daily driver, single owner." },
-    { make: "Honda", model: "Civic", year: 2019, price: 16500, rentalPrice: 55, status: "available", forSale: true, forRent: true, inGarage: false, description: "Fuel efficient, clean interior." },
-    { make: "Ford", model: "Mustang", year: 2021, price: 42000, rentalPrice: 150, status: "available", forSale: false, forRent: true, inGarage: false, description: "V8, low mileage, weekend cruiser." },
-    { make: "BMW", model: "X5", year: 2022, price: 68000, rentalPrice: 200, status: "available", forSale: true, forRent: false, inGarage: false, description: "Full service history, panoramic roof." },
-    { make: "Tesla", model: "Model 3", year: 2023, price: 51000, rentalPrice: 180, status: "available", forSale: true, forRent: true, inGarage: false, description: "Autopilot, long range battery." },
-    { make: "Mercedes-Benz", model: "C-Class", year: 2020, price: 39500, rentalPrice: 140, status: "parked", forSale: false, forRent: false, inGarage: true, description: "Parked in garage, ready when needed." },
-    { make: "Audi", model: "A4", year: 2021, price: 37000, rentalPrice: 130, status: "available", forSale: true, forRent: false, inGarage: false, description: "Quattro AWD, premium sound." },
-    { make: "Volkswagen", model: "Golf", year: 2018, price: 14000, rentalPrice: 50, status: "available", forSale: false, forRent: true, inGarage: false, description: "Compact and economical." },
-    { make: "Nissan", model: "Altima", year: 2019, price: 15500, rentalPrice: 55, status: "sold", forSale: false, forRent: false, inGarage: false, description: "Previously sold through the platform." },
-    { make: "Chevrolet", model: "Camaro", year: 2020, price: 36000, rentalPrice: 140, status: "rented", forSale: false, forRent: true, inGarage: false, description: "Currently out on rent." },
+    { make: "Toyota", model: "Corolla", year: 2020, price: 18000, rentalPrice: 60, status: "available", forSale: true, forRent: false, inGarage: false, description: "Reliable daily driver, single owner.", fuelType: "petrol", transmission: "automatic", color: "white", bodyType: "sedan", mileage: 35000 },
+    { make: "Honda", model: "Civic", year: 2019, price: 16500, rentalPrice: 55, status: "available", forSale: true, forRent: true, inGarage: false, description: "Fuel efficient, clean interior.", fuelType: "petrol", transmission: "manual", color: "silver", bodyType: "sedan", mileage: 48000 },
+    { make: "Ford", model: "Mustang", year: 2021, price: 42000, rentalPrice: 150, status: "available", forSale: false, forRent: true, inGarage: false, description: "V8, low mileage, weekend cruiser.", fuelType: "petrol", transmission: "manual", color: "red", bodyType: "coupe", mileage: 12000 },
+    { make: "BMW", model: "X5", year: 2022, price: 68000, rentalPrice: 200, status: "available", forSale: true, forRent: false, inGarage: false, description: "Full service history, panoramic roof.", fuelType: "diesel", transmission: "automatic", color: "black", bodyType: "suv", mileage: 18000 },
+    { make: "Tesla", model: "Model 3", year: 2023, price: 51000, rentalPrice: 180, status: "available", forSale: true, forRent: true, inGarage: false, description: "Autopilot, long range battery.", fuelType: "electric", transmission: "automatic", color: "blue", bodyType: "sedan", mileage: 8000 },
+    { make: "Mercedes-Benz", model: "C-Class", year: 2020, price: 39500, rentalPrice: 140, status: "parked", forSale: false, forRent: false, inGarage: true, description: "Parked in garage, ready when needed.", fuelType: "petrol", transmission: "automatic", color: "grey", bodyType: "sedan", mileage: 25000 },
+    { make: "Audi", model: "A4", year: 2021, price: 37000, rentalPrice: 130, status: "available", forSale: true, forRent: false, inGarage: false, description: "Quattro AWD, premium sound.", fuelType: "diesel", transmission: "automatic", color: "white", bodyType: "sedan", mileage: 22000 },
+    { make: "Volkswagen", model: "Golf", year: 2018, price: 14000, rentalPrice: 50, status: "available", forSale: false, forRent: true, inGarage: false, description: "Compact and economical.", fuelType: "petrol", transmission: "manual", color: "red", bodyType: "hatchback", mileage: 65000 },
+    { make: "Nissan", model: "Altima", year: 2019, price: 15500, rentalPrice: 55, status: "sold", forSale: false, forRent: false, inGarage: false, description: "Previously sold through the platform.", fuelType: "petrol", transmission: "automatic", color: "silver", bodyType: "sedan", mileage: 55000 },
+    { make: "Chevrolet", model: "Camaro", year: 2020, price: 36000, rentalPrice: 140, status: "rented", forSale: false, forRent: true, inGarage: false, description: "Currently out on rent.", fuelType: "petrol", transmission: "automatic", color: "yellow", bodyType: "coupe", mileage: 15000 },
 ];
 
 const UPLOADS_DIR = path.join(__dirname, "..", "..", "uploads", "cars");

@@ -55,7 +55,29 @@ const carSchema = new mongoose.Schema({
     },
     images: [{
         type: String
-    }]
+    }],
+
+    // Documents (file paths). Can be images or PDFs — multer accepts both.
+    carteGrise: { type: String, default: null },
+    customerDocument: { type: String, default: null },
+    salesCertificate: { type: String, default: null },
+    idCardFront: { type: String, default: null },
+    idCardBack: { type: String, default: null },
+
+    // Specs
+    fuelType: {
+        type: String,
+        enum: ['petrol', 'diesel', 'electric', 'hybrid', 'lpg', 'cng', 'other', null],
+        default: null,
+    },
+    transmission: {
+        type: String,
+        enum: ['manual', 'automatic', null],
+        default: null,
+    },
+    color: { type: String, default: null },
+    bodyType: { type: String, default: null },
+    mileage: { type: Number, min: 0, default: null },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Car', carSchema);
