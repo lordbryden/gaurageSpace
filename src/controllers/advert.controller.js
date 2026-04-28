@@ -222,6 +222,16 @@ exports.updateAdvert = async(req, res) => {
     }
 };
 
+// DELETE /api/adverts/all — admin / super_admin only. Wipes the collection.
+exports.deleteAllAdverts = async(req, res) => {
+    try {
+        const result = await Advert.deleteMany({});
+        res.json({ success: true, message: `Deleted ${result.deletedCount} adverts` });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // DELETE /api/adverts/:id
 exports.deleteAdvert = async(req, res) => {
     try {

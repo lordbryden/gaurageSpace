@@ -46,6 +46,15 @@ const userSchema = new mongoose.Schema({
         enum: ['unverified', 'pending', 'verified'],
         default: 'unverified',
     },
+    // Authorization tier. regular is the default at registration.
+    // merchant is reached automatically by creating a car or uploading personal
+    // details. admin is set by a super_admin via PUT /api/users/:id/role.
+    // super_admin can only be set directly in the DB.
+    role: {
+        type: String,
+        enum: ['regular', 'merchant', 'admin', 'super_admin'],
+        default: 'regular',
+    },
 }, { timestamps: true });
 
 module.exports = mongoose.model("User", userSchema);

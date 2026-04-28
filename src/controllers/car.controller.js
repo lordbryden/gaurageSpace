@@ -114,7 +114,11 @@ exports.createCar = async(req, res) => {
         });
 
         await car.save();
-        await User.findByIdAndUpdate(owner, { $addToSet: { cars: car._id } });
+
+        // Auto-promote regular users to merchant on their first car upload.
+        const ownerUpdate = { $addToSet: { cars: car._id } };
+        if (req.user.role === 'regular') ownerUpdate.$set = { role: 'merchant' };
+        await User.findByIdAndUpdate(owner, ownerUpdate);
 
         res.status(201).json({ success: true, data: car });
     } catch (error) {

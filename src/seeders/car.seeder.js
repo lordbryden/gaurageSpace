@@ -52,14 +52,25 @@ const run = async() => {
     await mongoose.connect(process.env.MONGO_URI);
     console.log("MongoDB connected");
 
-    // Ensure a seed user exists so we have an owner for the cars.
+    // Ensure a seed user exists so we have an owner for the cars. The seed
+    // user is also the project's super_admin — convenient for hitting
+    // admin-only endpoints without hand-editing Mongo.
     let user = await User.findOne({ phone: SEED_USER.phone });
     if (!user) {
         const hashed = await bcrypt.hash(SEED_USER.password, 10);
-        user = await User.create({ name: SEED_USER.name, phone: SEED_USER.phone, password: hashed });
-        console.log(`Created seed user (phone: ${SEED_USER.phone}, password: ${SEED_USER.password})`);
+        user = await User.create({
+            name: SEED_USER.name,
+            phone: SEED_USER.phone,
+            password: hashed,
+            role: 'super_admin',
+        });
+        console.log(`Created seed user as super_admin (phone: ${SEED_USER.phone}, password: ${SEED_USER.password})`);
+    } else if (user.role !== 'super_admin') {
+        user.role = 'super_admin';
+        await user.save();
+        console.log(`Reusing seed user (phone: ${SEED_USER.phone}); promoted to super_admin`);
     } else {
-        console.log(`Reusing existing seed user (phone: ${SEED_USER.phone})`);
+        console.log(`Reusing seed user (phone: ${SEED_USER.phone}, role: super_admin)`);
     }
 
     // Idempotent: drop cars previously seeded for this user so re-runs don't

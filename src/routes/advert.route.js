@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
+const requireRole = require('../middleware/requireRole');
 const upload = require('../middleware/multerAdvert');
 const {
     createAdvert,
@@ -10,6 +11,7 @@ const {
     getAdvert,
     updateAdvert,
     deleteAdvert,
+    deleteAllAdverts,
     setPriority,
     trackClick
 } = require('../controllers/advert.controller');
@@ -185,6 +187,22 @@ router.get('/:id', auth, getAdvert);
  *        description: Advert updated
  */
 router.put('/:id', upload.array('images', 5), auth, updateAdvert);
+
+/**
+ * @swagger
+ * /api/adverts/all:
+ *  delete:
+ *    summary: Delete every advert in the system (admin / super_admin only)
+ *    tags: [Adverts]
+ *    security:
+ *      - bearerAuth: []
+ *    responses:
+ *      '200':
+ *        description: All adverts deleted
+ *      '403':
+ *        description: Insufficient permissions
+ */
+router.delete('/all', auth, requireRole('admin', 'super_admin'), deleteAllAdverts);
 
 /**
  * @swagger

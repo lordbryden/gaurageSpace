@@ -20,6 +20,7 @@ const buildUserResponse = (user) => ({
     idCardFront: user.idCardFront == null ? null : user.idCardFront,
     idCardBack: user.idCardBack == null ? null : user.idCardBack,
     verified: user.verified || 'unverified',
+    role: user.role || 'regular',
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
 });
@@ -275,6 +276,74 @@ exports.updateMyDetails = async(req, res) => {
         ).select("-password -activeToken");
 
         res.status(200).json({ success: true, data: updated });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// PUT /api/users/me/details — uploads idCardFront/idCardBack/image for the
+// authenticated user. Performs auto-promotion from regular → merchant once
+// any of those documents is provided.
+exports.updateMyDetails = async(req, res) => {
+    try {
+        const update = {};
+        const files = req.files || {};
+        if (files.idCardFront && files.idCardFront[0]) update.idCardFront = `/users/${files.idCardFront[0].filename}`;
+        if (files.idCardBack && files.idCardBack[0]) update.idCardBack = `/users/${files.idCardBack[0].filename}`;
+        if (files.image && files.image[0]) update.image = `/users/${files.image[0].filename}`;
+
+        if (Object.keys(update).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Provide at least one of: idCardFront, idCardBack, image"
+            });
+        }
+
+        if (req.user.role === 'regular') update.role = 'merchant';
+
+        const updated = await User.findByIdAndUpdate(
+            req.user._id,
+            update, { new: true }
+        );
+
+        res.status(200).json({ success: true, data: buildUserResponse(updated) });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// PUT /api/users/:id/role — super_admin only. Can set role to regular,
+// merchant or admin. super_admin promotion stays manual (DB-only).
+exports.updateUserRole = async(req, res) => {
+    try {
+        const { role } = req.body;
+        const allowed = ['regular', 'merchant', 'admin'];
+        if (!allowed.includes(role)) {
+            return res.status(400).json({
+                success: false,
+                message: `role must be one of: ${allowed.join(', ')}`
+            });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, message: "Invalid user id" });
+        }
+
+        const target = await User.findById(req.params.id);
+        if (!target) return res.status(404).json({ success: false, message: "User not found" });
+
+        // Don't let anyone (even super_admin) demote a super_admin via this endpoint.
+        if (target.role === 'super_admin') {
+            return res.status(400).json({
+                success: false,
+                message: "Cannot change a super_admin's role via this endpoint"
+            });
+        }
+
+        target.role = role;
+        await target.save();
+
+        res.status(200).json({ success: true, data: buildUserResponse(target) });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
