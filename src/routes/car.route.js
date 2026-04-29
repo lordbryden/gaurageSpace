@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
+const requireRole = require('../middleware/requireRole');
 const upload = require('../middleware/multer');
 
 // All file fields the create/update endpoints can receive.
@@ -25,7 +26,8 @@ const {
     getAvailableCars,
     getUserSaleCars,
     getUserRentCars,
-    searchCars
+    searchCars,
+    setCarVerification
 } = require('../controllers/car.controller');
 
 /**
@@ -325,6 +327,46 @@ router.put('/:id', carFiles, auth, updateCar);
  *        description: Car deleted
  */
 router.delete('/:id', auth, deleteCar);
+
+/**
+ * @swagger
+ * /api/cars/{id}/verify:
+ *  post:
+ *    summary: Set a car's verified flag explicitly (admin / super_admin only)
+ *    description: |
+ *      Caller passes the desired state in the body — either "verified" or "unverified".
+ *      Booleans true/false are also accepted as a convenience.
+ *    tags: [Cars]
+ *    security:
+ *      - bearerAuth: []
+ *    parameters:
+ *      - in: path
+ *        name: id
+ *        required: true
+ *        schema:
+ *          type: string
+ *    requestBody:
+ *      required: true
+ *      content:
+ *        application/json:
+ *          schema:
+ *            type: object
+ *            required: [verified]
+ *            properties:
+ *              verified:
+ *                type: string
+ *                enum: [verified, unverified]
+ *    responses:
+ *      '200':
+ *        description: Verification state set
+ *      '400':
+ *        description: Missing or invalid verified value
+ *      '403':
+ *        description: Insufficient permissions
+ *      '404':
+ *        description: Car not found
+ */
+router.post('/:id/verify', auth, requireRole('admin', 'super_admin'), setCarVerification);
 
 /**
  * @swagger

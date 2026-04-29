@@ -55,6 +55,16 @@ const userSchema = new mongoose.Schema({
         enum: ['regular', 'merchant', 'admin', 'super_admin'],
         default: 'regular',
     },
+    email: {
+        type: String,
+        default: null,
+        trim: true,
+        lowercase: true,
+    },
+    dateOfBirth: {
+        type: Date,
+        default: null,
+    },
 }, { timestamps: true });
 
 module.exports = mongoose.model("User", userSchema);

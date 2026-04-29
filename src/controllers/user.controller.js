@@ -19,6 +19,8 @@ const buildUserResponse = (user) => ({
     image: user.image == null ? null : user.image,
     idCardFront: user.idCardFront == null ? null : user.idCardFront,
     idCardBack: user.idCardBack == null ? null : user.idCardBack,
+    email: user.email == null ? null : user.email,
+    dateOfBirth: user.dateOfBirth == null ? null : user.dateOfBirth,
     verified: user.verified || 'unverified',
     role: user.role || 'regular',
     createdAt: user.createdAt,
@@ -137,7 +139,7 @@ exports.getUserById = async(req, res) => {
 // UPDATE user
 exports.updateUser = async(req, res) => {
     try {
-        const { name, phone, password, repeatPassword } = req.body;
+        const { name, phone, password, repeatPassword, email, dateOfBirth } = req.body;
 
         const updateData = {};
         if (name) updateData.name = name;
@@ -148,6 +150,9 @@ exports.updateUser = async(req, res) => {
             }
             updateData.password = await bcrypt.hash(password, 10);
         }
+        // Allow setting back to null by sending an empty string.
+        if (email !== undefined) updateData.email = email || null;
+        if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth || null;
 
         const updatedUser = await User.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true }).select("-password");
         if (!updatedUser) return res.status(404).json({ success: false, message: "User not found" });

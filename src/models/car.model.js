@@ -78,6 +78,14 @@ const carSchema = new mongoose.Schema({
     color: { type: String, default: null },
     bodyType: { type: String, default: null },
     mileage: { type: Number, min: 0, default: null },
+
+    // Verification badge. Only admin / super_admin can set this — handled in
+    // the controllers, not enforced at the schema level.
+    verified: {
+        type: String,
+        enum: ['unverified', 'verified'],
+        default: 'unverified',
+    },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Car', carSchema);

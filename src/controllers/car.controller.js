@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Car = require('../models/car.model');
 const User = require('../models/user.model');
 
@@ -74,8 +75,10 @@ exports.createCar = async(req, res) => {
             color,
             bodyType,
             mileage,
+            verified,
         } = req.body;
         const owner = req.user._id;
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
 
         const existingCar = await Car.findOne({ vin, owner });
         if (existingCar) {
@@ -105,6 +108,10 @@ exports.createCar = async(req, res) => {
             color: color || null,
             bodyType: bodyType || null,
             mileage: mileage !== undefined && mileage !== '' ? Number(mileage) : null,
+            // Only admin / super_admin can pre-mark a car as verified.
+            verified: isAdmin && (verified === 'verified' || verified === true || verified === 'true')
+                ? 'verified'
+                : 'unverified',
             images: uploadedImagePaths(req),
             carteGrise: firstUploadedPath(req, 'carteGrise'),
             customerDocument: firstUploadedPath(req, 'customerDocument'),
@@ -248,6 +255,13 @@ exports.updateCar = async(req, res) => {
         const car = await Car.findOne({ _id: req.params.id, owner: req.user._id });
         if (!car) return res.status(404).json({ success: false, message: 'Car not yours' });
 
+        // Strip verified from the payload unless the caller is admin —
+        // otherwise anyone could self-verify via PUT.
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
+        if (req.body.verified !== undefined && !isAdmin) {
+            delete req.body.verified;
+        }
+
         Object.assign(car, req.body);
 
         // Append newly uploaded images to the existing list rather than
@@ -264,6 +278,43 @@ exports.updateCar = async(req, res) => {
 
         await car.save();
         res.json({ success: true, data: car });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// POST /api/cars/:id/verify — admin / super_admin only. The caller explicitly
+// passes the desired state in the body; this endpoint does not flip whatever
+// was there. Accepts the strings "verified" / "unverified", and as a
+// convenience also accepts booleans true/false and the matching strings.
+exports.setCarVerification = async(req, res) => {
+    try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, message: 'Invalid car id' });
+        }
+
+        const raw = req.body.verified;
+        let value;
+        if (raw === 'verified' || raw === true || raw === 'true') value = 'verified';
+        else if (raw === 'unverified' || raw === false || raw === 'false') value = 'unverified';
+        else {
+            return res.status(400).json({
+                success: false,
+                message: 'Body must include "verified": "verified" or "unverified"',
+            });
+        }
+
+        const car = await Car.findById(req.params.id);
+        if (!car) return res.status(404).json({ success: false, message: 'Car not found' });
+
+        car.verified = value;
+        await car.save();
+
+        res.json({
+            success: true,
+            message: `Car marked as ${value}`,
+            data: car,
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
