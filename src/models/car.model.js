@@ -86,6 +86,22 @@ const carSchema = new mongoose.Schema({
         enum: ['unverified', 'verified'],
         default: 'unverified',
     },
+
+    // AI annotations populated by the background verifier (services/carVerifier).
+    // flagged means the AI thinks the image isn't a car. Admins can still
+    // manually verify or unverify regardless of these.
+    flagged: {
+        type: Boolean,
+        default: false,
+    },
+    verificationReason: {
+        type: String,
+        default: null,
+    },
+    verificationCheckedAt: {
+        type: Date,
+        default: null,
+    },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Car', carSchema);

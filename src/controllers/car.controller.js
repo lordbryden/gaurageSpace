@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Car = require('../models/car.model');
 const User = require('../models/user.model');
+const { runCarVerification } = require('../services/carVerifier');
 
 // Escape user-supplied strings before dropping them into a regex so odd
 // characters (like "(", ".", etc.) can't break the query or trigger ReDoS.
@@ -126,6 +127,13 @@ exports.createCar = async(req, res) => {
         const ownerUpdate = { $addToSet: { cars: car._id } };
         if (req.user.role === 'regular') ownerUpdate.$set = { role: 'merchant' };
         await User.findByIdAndUpdate(owner, ownerUpdate);
+
+        // Kick off AI verification in the background. Skipped automatically
+        // when the car was admin-pre-verified or has no image. Errors are
+        // swallowed inside the verifier — must never affect car creation.
+        if (car.verified !== 'verified' && car.images && car.images.length) {
+            runCarVerification(car._id);
+        }
 
         res.status(201).json({ success: true, data: car });
     } catch (error) {
