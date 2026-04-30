@@ -7,13 +7,24 @@
 // from-scratch local model later — runCarVerification is the only entry
 // point the rest of the codebase touches, so the swap is one-file.
 
+// Defensive: server.js already calls dotenv at startup, but if this module
+// happens to be loaded standalone (e.g. a worker, test, one-off script) we
+// still want HF_TOKEN populated. dotenv is idempotent — a second call is
+// a no-op when the var is already set.
+require('dotenv').config();
+
 const fs = require('fs');
 const path = require('path');
 
 const Car = require('../models/car.model');
 
 const MODEL = 'google/vit-base-patch16-224';
-const ENDPOINT = `https://api-inference.huggingface.co/models/${MODEL}`;
+// HF migrated their Inference API to a "router" URL under the
+// Inference Providers system. The old api-inference.huggingface.co
+// path now 404s for most models. Falling back to the legacy URL on
+// failure keeps this resilient if HF rolls things back.
+const ENDPOINT_PRIMARY = `https://router.huggingface.co/hf-inference/models/${MODEL}`;
+const ENDPOINT_FALLBACK = `https://api-inference.huggingface.co/models/${MODEL}`;
 const REQUEST_TIMEOUT_MS = 30_000;
 const VEHICLE_CONFIDENCE_THRESHOLD = 0.3;
 
@@ -32,11 +43,23 @@ const looksLikeVehicle = (label) => {
     return VEHICLE_KEYWORDS.some((kw) => l.includes(kw));
 };
 
+// Node 18's fetch hides the real network error inside err.cause. This wrapper
+// surfaces it so logs say "ENOTFOUND router.huggingface.co" rather than the
+// useless "fetch failed".
 const fetchWithTimeout = async(url, options, timeoutMs) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
         return await fetch(url, {...options, signal: controller.signal });
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            throw new Error(`request timed out after ${timeoutMs}ms`);
+        }
+        const cause = err.cause;
+        const detail = cause ?
+            [cause.code, cause.message].filter(Boolean).join(' ').trim() :
+            err.message;
+        throw new Error(`network error: ${detail || err.message}`);
     } finally {
         clearTimeout(timer);
     }
@@ -53,7 +76,7 @@ const guessContentType = (filePath) => {
 // Throws on transport / API errors so the caller can decide what to do.
 const verifyCarImage = async(imagePath) => {
     if (!process.env.HF_TOKEN) {
-        throw new Error('HF_TOKEN env var not set');
+        throw new Error('HF_TOKEN env var not set (did you restart the server after editing .env?)');
     }
 
     const buf = await fs.promises.readFile(imagePath);
@@ -62,15 +85,37 @@ const verifyCarImage = async(imagePath) => {
         'Content-Type': guessContentType(imagePath),
     };
 
-    const res = await fetchWithTimeout(ENDPOINT, {
-        method: 'POST',
-        headers,
-        body: buf,
-    }, REQUEST_TIMEOUT_MS);
+    let res;
+    const attempts = [];
+    for (const endpoint of [ENDPOINT_PRIMARY, ENDPOINT_FALLBACK]) {
+        try {
+            res = await fetchWithTimeout(endpoint, {
+                method: 'POST',
+                headers,
+                body: buf,
+            }, REQUEST_TIMEOUT_MS);
+        } catch (err) {
+            // Network-layer failure (DNS, TLS, connection reset, timeout).
+            // Try the next URL instead of giving up.
+            attempts.push(`${endpoint} → ${err.message}`);
+            res = null;
+            continue;
+        }
 
-    if (!res.ok) {
+        if (res.ok) break;
+
+        // Auth / rate-limit / 5xx are real API failures — don't waste a
+        // second call on them.
+        if (res.status !== 404 && res.status !== 410) {
+            const text = await res.text().catch(() => '');
+            throw new Error(`HF API ${res.status}: ${text.slice(0, 200)}`);
+        }
         const text = await res.text().catch(() => '');
-        throw new Error(`HF API ${res.status}: ${text.slice(0, 200)}`);
+        attempts.push(`${endpoint} → HTTP ${res.status} ${text.slice(0, 80)}`);
+    }
+
+    if (!res || !res.ok) {
+        throw new Error(`all HF endpoints failed: ${attempts.join('; ')}`);
     }
 
     const predictions = await res.json();
