@@ -332,10 +332,14 @@ router.delete('/:id', auth, deleteCar);
  * @swagger
  * /api/cars/{id}/verify:
  *  post:
- *    summary: Set a car's verified flag explicitly (admin / super_admin only)
+ *    summary: Set a car's verified and/or flagged state (admin / super_admin only)
  *    description: |
- *      Caller passes the desired state in the body — either "verified" or "unverified".
- *      Booleans true/false are also accepted as a convenience.
+ *      Body must include "verified" and/or "flagged".
+ *      "verified": "verified"  → verified=verified, flagged=false
+ *      "verified": "unverified" → verified=unverified, flagged unchanged
+ *      "verified": "flagged"   → verified=unverified, flagged=true
+ *      "flagged": true|false   → sets flagged only, leaves verified alone
+ *      Both can be combined; explicit flagged wins over the implicit value from "verified".
  *    tags: [Cars]
  *    security:
  *      - bearerAuth: []
@@ -351,16 +355,17 @@ router.delete('/:id', auth, deleteCar);
  *        application/json:
  *          schema:
  *            type: object
- *            required: [verified]
  *            properties:
  *              verified:
  *                type: string
- *                enum: [verified, unverified]
+ *                enum: [verified, unverified, flagged]
+ *              flagged:
+ *                type: boolean
  *    responses:
  *      '200':
  *        description: Verification state set
  *      '400':
- *        description: Missing or invalid verified value
+ *        description: Missing or invalid value
  *      '403':
  *        description: Insufficient permissions
  *      '404':

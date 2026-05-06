@@ -285,42 +285,87 @@ exports.updateCar = async(req, res) => {
         }
 
         await car.save();
+
+        // Re-verify in the background when new images are added. Skip if
+        // the car is already admin-verified — admin's decision wins.
+        if (newImages.length && car.verified !== 'verified') {
+            runCarVerification(car._id);
+        }
+
         res.json({ success: true, data: car });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// POST /api/cars/:id/verify — admin / super_admin only. The caller explicitly
-// passes the desired state in the body; this endpoint does not flip whatever
-// was there. Accepts the strings "verified" / "unverified", and as a
-// convenience also accepts booleans true/false and the matching strings.
+// POST /api/cars/:id/verify — admin / super_admin only. Body shapes:
+//   { verified: "verified" }              → verified=verified, flagged=false
+//   { verified: "unverified" }             → verified=unverified, flagged unchanged
+//   { verified: "flagged" }                → verified=unverified, flagged=true
+//   { verified: "unverified", flagged: true }  → explicit
+//   { flagged: true|false }                → set flagged only, leave verified alone
+// Booleans true/false are still accepted for the verified field as a
+// convenience for older clients.
 exports.setCarVerification = async(req, res) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
             return res.status(400).json({ success: false, message: 'Invalid car id' });
         }
 
-        const raw = req.body.verified;
-        let value;
-        if (raw === 'verified' || raw === true || raw === 'true') value = 'verified';
-        else if (raw === 'unverified' || raw === false || raw === 'false') value = 'unverified';
-        else {
+        const { verified: rawVerified, flagged: rawFlagged } = req.body;
+        const updates = {};
+        let touched = false;
+
+        if (rawVerified !== undefined) {
+            if (rawVerified === 'verified' || rawVerified === true || rawVerified === 'true') {
+                updates.verified = 'verified';
+                // Verifying clears any prior flag — a confirmed car can't
+                // simultaneously be a flagged "not a car".
+                updates.flagged = false;
+            } else if (rawVerified === 'unverified' || rawVerified === false || rawVerified === 'false') {
+                updates.verified = 'unverified';
+            } else if (rawVerified === 'flagged') {
+                updates.verified = 'unverified';
+                updates.flagged = true;
+            } else {
+                return res.status(400).json({
+                    success: false,
+                    message: 'verified must be "verified", "unverified", or "flagged"',
+                });
+            }
+            touched = true;
+        }
+
+        // Independent flagged setting (or override the implicit flagged=false
+        // from a "verified" call). Explicit always wins.
+        if (rawFlagged !== undefined) {
+            if (rawFlagged === true || rawFlagged === 'true') updates.flagged = true;
+            else if (rawFlagged === false || rawFlagged === 'false') updates.flagged = false;
+            else {
+                return res.status(400).json({
+                    success: false,
+                    message: 'flagged must be true or false',
+                });
+            }
+            touched = true;
+        }
+
+        if (!touched) {
             return res.status(400).json({
                 success: false,
-                message: 'Body must include "verified": "verified" or "unverified"',
+                message: 'Body must include "verified" and/or "flagged"',
             });
         }
 
         const car = await Car.findById(req.params.id);
         if (!car) return res.status(404).json({ success: false, message: 'Car not found' });
 
-        car.verified = value;
+        Object.assign(car, updates);
         await car.save();
 
         res.json({
             success: true,
-            message: `Car marked as ${value}`,
+            message: `Car updated: verified=${car.verified}, flagged=${car.flagged}`,
             data: car,
         });
     } catch (error) {

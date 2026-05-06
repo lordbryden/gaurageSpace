@@ -107,50 +107,80 @@ const detectObjects = async(imagePath) => {
     return detections;
 };
 
-// Verify across multiple images. Returns { isCar, confidence, reason }.
-// Strategy: any image with a clear vehicle detection (≥ threshold) is enough
-// to mark the car verified. Only when *every* image fails to surface a
-// vehicle do we flag it.
+// Verify across multiple images. Runs detection on every image so the caller
+// can see exactly what each one looks like. Returns:
+//   { isCar, confidence, reason, perImage: [{ index, isCar, label?, score?, topLabel?, topScore?, error? }] }
+// A car is considered a car if *any* image had a vehicle ≥ threshold.
 const verifyCarImages = async(imagePaths) => {
-    const allDetections = []; // for crafting a meaningful "why not" reason
-    const errors = [];
+    const perImage = [];
+    let errorCount = 0;
 
     for (let i = 0; i < imagePaths.length; i++) {
+        const idx = i + 1;
         let detections;
         try {
             detections = await detectObjects(imagePaths[i]);
         } catch (err) {
-            errors.push(`image ${i + 1}: ${err.message}`);
+            errorCount++;
+            perImage.push({ index: idx, isCar: false, error: err.message });
             continue;
         }
 
-        const vehicles = detections.filter((d) =>
-            VEHICLE_LABELS.has(d.label) && d.score >= DETECTION_THRESHOLD
-        );
+        const vehicles = detections
+            .filter((d) => VEHICLE_LABELS.has(d.label) && d.score >= DETECTION_THRESHOLD)
+            .sort((a, b) => b.score - a.score);
+
         if (vehicles.length) {
-            const best = vehicles.sort((a, b) => b.score - a.score)[0];
-            return {
+            const best = vehicles[0];
+            perImage.push({
+                index: idx,
                 isCar: true,
-                confidence: best.score,
-                reason: `Detected ${best.label} (${(best.score * 100).toFixed(1)}%) in image ${i + 1} of ${imagePaths.length}`,
-            };
+                label: best.label,
+                score: best.score,
+            });
+        } else {
+            const top = detections.slice().sort((a, b) => b.score - a.score)[0];
+            perImage.push({
+                index: idx,
+                isCar: false,
+                topLabel: top ? top.label : null,
+                topScore: top ? top.score : 0,
+            });
         }
-        allDetections.push(...detections);
     }
 
-    // If every call errored, surface that — don't silently flag.
-    if (errors.length === imagePaths.length) {
-        throw new Error(`detection failed for all images: ${errors.join('; ')}`);
+    if (errorCount === imagePaths.length) {
+        const messages = perImage.map((r) => `image ${r.index}: ${r.error}`).join('; ');
+        throw new Error(`detection failed for all images: ${messages}`);
     }
 
-    // Best non-vehicle detection across all images, used as the "why" reason.
-    const top = allDetections.sort((a, b) => b.score - a.score)[0];
+    // Strict: every image must show a vehicle. Any failure (non-vehicle
+    // detection or API error) → not verified.
+    const isCar = perImage.length > 0 && perImage.every((r) => r.isCar);
+    const vehicleResults = perImage.filter((r) => r.isCar);
+    const bestVehicle = vehicleResults.sort((a, b) => b.score - a.score)[0];
+
+    let reason;
+    if (isCar) {
+        reason = `All ${imagePaths.length} images contained vehicles (best: ${bestVehicle.label} ${(bestVehicle.score * 100).toFixed(1)}%)`;
+    } else {
+        const failures = perImage
+            .filter((r) => !r.isCar)
+            .map((r) => {
+                if (r.error) return `image ${r.index} errored (${r.error})`;
+                if (r.topLabel) return `image ${r.index}: ${r.topLabel} ${(r.topScore * 100).toFixed(1)}%`;
+                return `image ${r.index}: no detections`;
+            })
+            .join('; ');
+        const failCount = imagePaths.length - vehicleResults.length;
+        reason = `${failCount}/${imagePaths.length} image(s) not vehicles → ${failures}`;
+    }
+
     return {
-        isCar: false,
-        confidence: top ? top.score : 0,
-        reason: top ?
-            `No vehicle detected; top object was ${top.label} (${(top.score * 100).toFixed(1)}%)` :
-            'No objects detected in any uploaded image',
+        isCar,
+        confidence: bestVehicle ? bestVehicle.score : 0,
+        reason,
+        perImage,
     };
 };
 
@@ -179,6 +209,22 @@ const runCarVerification = async(carId) => {
         }
 
         const result = await verifyCarImages(onDisk);
+
+        // Per-image breakdown so you can trace which images contained
+        // vehicles and which didn't.
+        for (const r of result.perImage) {
+            const tag = `[verifier] car ${carId} image ${r.index}/${onDisk.length}`;
+            if (r.error) {
+                console.warn(`${tag}: ERROR — ${r.error}`);
+            } else if (r.isCar) {
+                console.log(`${tag}: VEHICLE — ${r.label} (${(r.score * 100).toFixed(1)}%)`);
+            } else {
+                const top = r.topLabel ?
+                    `${r.topLabel} ${(r.topScore * 100).toFixed(1)}%` :
+                    'nothing detected';
+                console.log(`${tag}: no vehicle (top object: ${top})`);
+            }
+        }
 
         const update = {
             verificationCheckedAt: new Date(),

@@ -20,9 +20,15 @@ const options = {
             version: "1.0.0",
             description: "API Documentation",
         },
-        servers: [{
-            url: "http://localhost:3000",
-        }],
+        // Swagger UI lets the user pick a server from this dropdown when
+        // hitting "Try it out". Keeping localhost as one option is handy for
+        // local dev, but "/" (relative — same origin as the docs page) is
+        // what makes the deployed server work without code changes.
+        servers: [
+            ...(process.env.API_BASE_URL ? [{ url: process.env.API_BASE_URL, description: "Configured server" }] : []),
+            { url: "/", description: "Same origin as Swagger UI" },
+            { url: "http://localhost:3000", description: "Local dev" },
+        ],
         components: {
             securitySchemes: {
                 bearerAuth: {
