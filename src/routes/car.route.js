@@ -372,26 +372,23 @@ router.delete('/:id', auth, deleteCar);
  *      '404':
  *        description: Car not found
  */
-router.post('/:id/verify', auth, requireRole('admin', 'super_admin'), setCarVerification);
-
 /**
  * @swagger
  * /api/cars/verify-all:
  *  post:
  *    summary: |
- *      [TEMPORARY — testing only] Bulk-verify every car in the database.
- *      Sets verified='verified' and flagged=false on all cars. Admin / super_admin only.
+ *      [TEMPORARY — testing only, no auth] Bulk-verify every car in the database.
+ *      Sets verified='verified' and flagged=false on all cars.
  *      Remove this endpoint before going live.
  *    tags: [Cars]
- *    security:
- *      - bearerAuth: []
  *    responses:
  *      '200':
  *        description: All cars marked verified
- *      '403':
- *        description: Insufficient permissions
  */
-router.post('/verify-all', auth, requireRole('admin', 'super_admin'), verifyAllCars);
+// Registered before /:id/verify so the literal path always wins.
+router.post('/verify-all', verifyAllCars);
+
+router.post('/:id/verify', auth, requireRole('admin', 'super_admin'), setCarVerification);
 
 /**
  * @swagger
