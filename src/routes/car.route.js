@@ -27,7 +27,8 @@ const {
     getUserSaleCars,
     getUserRentCars,
     searchCars,
-    setCarVerification
+    setCarVerification,
+    verifyAllCars
 } = require('../controllers/car.controller');
 
 /**
@@ -372,6 +373,25 @@ router.delete('/:id', auth, deleteCar);
  *        description: Car not found
  */
 router.post('/:id/verify', auth, requireRole('admin', 'super_admin'), setCarVerification);
+
+/**
+ * @swagger
+ * /api/cars/verify-all:
+ *  post:
+ *    summary: |
+ *      [TEMPORARY — testing only] Bulk-verify every car in the database.
+ *      Sets verified='verified' and flagged=false on all cars. Admin / super_admin only.
+ *      Remove this endpoint before going live.
+ *    tags: [Cars]
+ *    security:
+ *      - bearerAuth: []
+ *    responses:
+ *      '200':
+ *        description: All cars marked verified
+ *      '403':
+ *        description: Insufficient permissions
+ */
+router.post('/verify-all', auth, requireRole('admin', 'super_admin'), verifyAllCars);
 
 /**
  * @swagger

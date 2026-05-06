@@ -298,6 +298,27 @@ exports.updateCar = async(req, res) => {
     }
 };
 
+// TEMPORARY: bulk-verify every car. Intended for testing the
+// verified-badge UX without manually clicking through each car. Remove this
+// endpoint (and its route) before going live.
+exports.verifyAllCars = async(req, res) => {
+    try {
+        const result = await Car.updateMany({}, {
+            $set: { verified: 'verified', flagged: false },
+        });
+        res.json({
+            success: true,
+            message: `Marked ${result.modifiedCount} cars as verified`,
+            data: {
+                matched: result.matchedCount,
+                modified: result.modifiedCount,
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // POST /api/cars/:id/verify — admin / super_admin only. Body shapes:
 //   { verified: "verified" }              → verified=verified, flagged=false
 //   { verified: "unverified" }             → verified=unverified, flagged unchanged
