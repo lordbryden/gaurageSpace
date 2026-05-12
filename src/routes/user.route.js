@@ -30,7 +30,11 @@ const {
  * @swagger
  * /api/users/register:
  *   post:
- *     summary: Register a new user
+ *     summary: Register a new user (issues an OTP — no token until confirmed)
+ *     description: |
+ *       Creates the user account and returns a 6-digit OTP. In DEV mode the
+ *       OTP is echoed in the response body. Confirm it via
+ *       POST /api/users/verify-otp to receive the session token.
  *     tags: [Users]
  *     requestBody:
  *       required: true
@@ -54,7 +58,7 @@ const {
  *                 type: string
  *     responses:
  *       201:
- *         description: User created successfully
+ *         description: User created — OTP issued (dev mode returns it inline)
  */
 router.post(
     "/register", [

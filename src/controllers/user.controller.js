@@ -47,20 +47,29 @@ exports.registerUser = async(req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = await User.create({ name, phone, password: hashedPassword });
 
-        // Auto-login: mint the same kind of non-expiring token login does and
-        // persist it as the user's activeToken so later logins/logouts can
-        // invalidate the session the same way.
-        const token = jwt.sign({ id: newUser._id, phone: newUser.phone }, process.env.JWT_SECRET);
-        newUser.activeToken = token;
-        await newUser.save();
+        // Generate the same kind of 6-digit OTP that /login does. The token
+        // isn't minted until the user confirms with POST /api/users/verify-otp,
+        // so registration alone doesn't authenticate them.
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        const newUser = await User.create({
+            name,
+            phone,
+            password: hashedPassword,
+            loginOtp: {
+                code,
+                expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+            },
+        });
 
+        // DEV MODE: returning the OTP in the response. In production, send via
+        // SMS and drop the `otp` field from this response body.
         res.status(201).json({
             success: true,
-            message: "Registered successfully",
-            token,
-            user: buildUserResponse(newUser)
+            message: "Registered. Confirm with POST /api/users/verify-otp",
+            phone: newUser.phone,
+            otp: code,
+            expiresInSeconds: 600,
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
