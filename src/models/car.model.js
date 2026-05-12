@@ -87,6 +87,14 @@ const carSchema = new mongoose.Schema({
         default: 'unverified',
     },
 
+    // Premium-verified badge. Independent of `verified` — a car can be
+    // verified without being premium, and vice versa (rare). Admin /
+    // super_admin only, gated in the controllers.
+    premiumVerified: {
+        type: Boolean,
+        default: false,
+    },
+
     // AI annotations populated by the background verifier (services/carVerifier).
     // flagged means the AI thinks the image isn't a car. Admins can still
     // manually verify or unverify regardless of these.

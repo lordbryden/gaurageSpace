@@ -29,6 +29,15 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: null,
     },
+    // Two-step login: /login generates an OTP and stores it here; /verify-otp
+    // checks it, mints a session token, and clears these fields.
+    loginOtp: {
+        type: new mongoose.Schema({
+            code: { type: String, default: null },
+            expiresAt: { type: Date, default: null },
+        }, { _id: false }),
+        default: null,
+    },
     idCardFront: {
         type: String,
         default: null,

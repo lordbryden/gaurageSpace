@@ -164,12 +164,12 @@ exports.updateUser = async(req, res) => {
 };
 
 
-// LOGIN user
+// LOGIN user — step 1: validate password, generate OTP. The session token is
+// only minted by /verify-otp once the user confirms the code.
 exports.loginUser = async(req, res) => {
     try {
         const { phone, password } = req.body;
 
-        // Check if fields exist
         if (!phone || !password) {
             return res.status(400).json({
                 success: false,
@@ -177,31 +177,68 @@ exports.loginUser = async(req, res) => {
             });
         }
 
-        // Find user
         const user = await User.findOne({ phone });
         if (!user) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid credentials"
-            });
+            return res.status(400).json({ success: false, message: "Invalid credentials" });
         }
 
-        // Compare password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid credentials"
-            });
+            return res.status(400).json({ success: false, message: "Invalid credentials" });
         }
 
-        // Create non-expiring token. Persisting it on the user ensures only the
-        // most recent login is valid — any previous session (another device) is
-        // invalidated, and logout clears it entirely.
-        const token = jwt.sign({ id: user._id, phone: user.phone },
-            process.env.JWT_SECRET
-        );
+        // 6-digit OTP, 10-minute TTL.
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        user.loginOtp = {
+            code,
+            expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        };
+        await user.save();
 
+        // DEV MODE: returning the OTP in the response so it can be tested
+        // without an SMS provider. In production, send via SMS and drop
+        // `otp` from this response body.
+        res.status(200).json({
+            success: true,
+            message: "OTP generated. Confirm with POST /api/users/verify-otp",
+            phone: user.phone,
+            otp: code,
+            expiresInSeconds: 600,
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// LOGIN step 2: exchange OTP for a session token.
+exports.verifyLoginOtp = async(req, res) => {
+    try {
+        const { phone, otp } = req.body;
+
+        if (!phone || !otp) {
+            return res.status(400).json({ success: false, message: "Phone and OTP are required" });
+        }
+
+        const user = await User.findOne({ phone });
+        if (!user || !user.loginOtp || !user.loginOtp.code) {
+            return res.status(400).json({ success: false, message: "No OTP pending — request login first" });
+        }
+
+        if (!user.loginOtp.expiresAt || user.loginOtp.expiresAt < new Date()) {
+            user.loginOtp = null;
+            await user.save();
+            return res.status(400).json({ success: false, message: "OTP expired — request a new one" });
+        }
+
+        if (user.loginOtp.code !== String(otp)) {
+            return res.status(400).json({ success: false, message: "Invalid OTP" });
+        }
+
+        // Consume the OTP and mint a non-expiring token, same as the
+        // pre-OTP login flow did. Single active session per user still
+        // enforced via activeToken.
+        user.loginOtp = null;
+        const token = jwt.sign({ id: user._id, phone: user.phone }, process.env.JWT_SECRET);
         user.activeToken = token;
         await user.save();
 
@@ -209,14 +246,10 @@ exports.loginUser = async(req, res) => {
             success: true,
             message: "Login successful",
             token,
-            user: buildUserResponse(user)
+            user: buildUserResponse(user),
         });
-
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 

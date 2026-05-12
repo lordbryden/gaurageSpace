@@ -28,7 +28,9 @@ const {
     getUserRentCars,
     searchCars,
     setCarVerification,
-    verifyAllCars
+    verifyAllCars,
+    getHomeCars,
+    getMarketplaceCars
 } = require('../controllers/car.controller');
 
 /**
@@ -333,14 +335,15 @@ router.delete('/:id', auth, deleteCar);
  * @swagger
  * /api/cars/{id}/verify:
  *  post:
- *    summary: Set a car's verified and/or flagged state (admin / super_admin only)
+ *    summary: Set a car's verified, flagged and/or premiumVerified state (admin / super_admin only)
  *    description: |
- *      Body must include "verified" and/or "flagged".
+ *      Body must include at least one of "verified", "flagged", "premiumVerified".
  *      "verified": "verified"  → verified=verified, flagged=false
  *      "verified": "unverified" → verified=unverified, flagged unchanged
  *      "verified": "flagged"   → verified=unverified, flagged=true
  *      "flagged": true|false   → sets flagged only, leaves verified alone
- *      Both can be combined; explicit flagged wins over the implicit value from "verified".
+ *      "premiumVerified": true|false → sets the premium badge independently
+ *      Any combination of the three keys can be sent together.
  *    tags: [Cars]
  *    security:
  *      - bearerAuth: []
@@ -361,6 +364,8 @@ router.delete('/:id', auth, deleteCar);
  *                type: string
  *                enum: [verified, unverified, flagged]
  *              flagged:
+ *                type: boolean
+ *              premiumVerified:
  *                type: boolean
  *    responses:
  *      '200':
@@ -630,5 +635,49 @@ router.get('/available', getAvailableCars);
  *          Shape: { success, data: Car[], facets: { makes: [{make, count}], models: [{make, model, count}], years: [{year, count}] }, pagination }
  */
 router.get('/search', searchCars);
+
+/**
+ * @swagger
+ * /api/cars/home:
+ *  get:
+ *    summary: Cars for the home page (premiumVerified=true, available only)
+ *    description: |
+ *      Curated listings. Only premium-verified cars surface here. Supports the
+ *      same filter params as /search (make, model, year, price ranges, q).
+ *    tags: [Cars]
+ *    parameters:
+ *      - in: query
+ *        name: page
+ *        schema: { type: number, default: 1 }
+ *      - in: query
+ *        name: limit
+ *        schema: { type: number, default: 10 }
+ *    responses:
+ *      '200':
+ *        description: Premium car list
+ */
+router.get('/home', getHomeCars);
+
+/**
+ * @swagger
+ * /api/cars/marketplace:
+ *  get:
+ *    summary: Cars for the marketplace (premiumVerified=false, available only)
+ *    description: |
+ *      The general marketplace listing. Excludes premium-verified cars,
+ *      which live in /home. Supports the same filter params as /search.
+ *    tags: [Cars]
+ *    parameters:
+ *      - in: query
+ *        name: page
+ *        schema: { type: number, default: 1 }
+ *      - in: query
+ *        name: limit
+ *        schema: { type: number, default: 10 }
+ *    responses:
+ *      '200':
+ *        description: Marketplace car list
+ */
+router.get('/marketplace', getMarketplaceCars);
 
 module.exports = router;

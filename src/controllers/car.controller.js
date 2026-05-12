@@ -34,6 +34,11 @@ const buildCarFilter = (q) => {
         filter.$or = [{ make: re }, { model: re }, { description: re }];
     }
 
+    if (q.premiumVerified !== undefined) {
+        filter.premiumVerified = q.premiumVerified === 'true' || q.premiumVerified === true;
+    }
+    if (q.verified) filter.verified = q.verified;
+
     return filter;
 };
 
@@ -77,6 +82,7 @@ exports.createCar = async(req, res) => {
             bodyType,
             mileage,
             verified,
+            premiumVerified,
         } = req.body;
         const owner = req.user._id;
         const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
@@ -113,6 +119,8 @@ exports.createCar = async(req, res) => {
             verified: isAdmin && (verified === 'verified' || verified === true || verified === 'true')
                 ? 'verified'
                 : 'unverified',
+            // Same gate for premiumVerified.
+            premiumVerified: isAdmin && (premiumVerified === true || premiumVerified === 'true'),
             images: uploadedImagePaths(req),
             carteGrise: firstUploadedPath(req, 'carteGrise'),
             customerDocument: firstUploadedPath(req, 'customerDocument'),
@@ -263,11 +271,12 @@ exports.updateCar = async(req, res) => {
         const car = await Car.findOne({ _id: req.params.id, owner: req.user._id });
         if (!car) return res.status(404).json({ success: false, message: 'Car not yours' });
 
-        // Strip verified from the payload unless the caller is admin —
-        // otherwise anyone could self-verify via PUT.
+        // Strip verified / premiumVerified from the payload unless the caller
+        // is admin — otherwise anyone could self-verify via PUT.
         const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
-        if (req.body.verified !== undefined && !isAdmin) {
-            delete req.body.verified;
+        if (!isAdmin) {
+            if (req.body.verified !== undefined) delete req.body.verified;
+            if (req.body.premiumVerified !== undefined) delete req.body.premiumVerified;
         }
 
         Object.assign(car, req.body);
@@ -325,6 +334,8 @@ exports.verifyAllCars = async(req, res) => {
 //   { verified: "flagged" }                → verified=unverified, flagged=true
 //   { verified: "unverified", flagged: true }  → explicit
 //   { flagged: true|false }                → set flagged only, leave verified alone
+//   { premiumVerified: true|false }        → set premium badge (independent)
+// Any combination of the three keys can be sent in one call.
 // Booleans true/false are still accepted for the verified field as a
 // convenience for older clients.
 exports.setCarVerification = async(req, res) => {
@@ -333,7 +344,7 @@ exports.setCarVerification = async(req, res) => {
             return res.status(400).json({ success: false, message: 'Invalid car id' });
         }
 
-        const { verified: rawVerified, flagged: rawFlagged } = req.body;
+        const { verified: rawVerified, flagged: rawFlagged, premiumVerified: rawPremium } = req.body;
         const updates = {};
         let touched = false;
 
@@ -371,10 +382,23 @@ exports.setCarVerification = async(req, res) => {
             touched = true;
         }
 
+        // premiumVerified is independent from verified/flagged.
+        if (rawPremium !== undefined) {
+            if (rawPremium === true || rawPremium === 'true') updates.premiumVerified = true;
+            else if (rawPremium === false || rawPremium === 'false') updates.premiumVerified = false;
+            else {
+                return res.status(400).json({
+                    success: false,
+                    message: 'premiumVerified must be true or false',
+                });
+            }
+            touched = true;
+        }
+
         if (!touched) {
             return res.status(400).json({
                 success: false,
-                message: 'Body must include "verified" and/or "flagged"',
+                message: 'Body must include "verified", "flagged", and/or "premiumVerified"',
             });
         }
 
@@ -386,7 +410,7 @@ exports.setCarVerification = async(req, res) => {
 
         res.json({
             success: true,
-            message: `Car updated: verified=${car.verified}, flagged=${car.flagged}`,
+            message: `Car updated: verified=${car.verified}, flagged=${car.flagged}, premiumVerified=${car.premiumVerified}`,
             data: car,
         });
     } catch (error) {
@@ -429,6 +453,70 @@ exports.getAvailableCars = async(req, res) => {
             success: true,
             data: cars,
             pagination: { page: +page, limit: +limit, total, pages: Math.ceil(total / limit) }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/cars/home — premium-verified cars only. These are the curated
+// listings shown on the home page.
+exports.getHomeCars = async(req, res) => {
+    try {
+        const { page = 1, limit = 10 } = req.query;
+        const query = {
+            ...buildCarFilter(req.query),
+            status: 'available',
+            premiumVerified: true,
+        };
+
+        const pageNum = Math.max(1, Number(page));
+        const limitNum = Math.max(1, Number(limit));
+
+        const cars = await Car.find(query)
+            .populate('owner', 'name phone')
+            .sort({ createdAt: -1 })
+            .skip((pageNum - 1) * limitNum)
+            .limit(limitNum);
+
+        const total = await Car.countDocuments(query);
+
+        res.json({
+            success: true,
+            data: cars,
+            pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/cars/marketplace — non-premium available cars. The general
+// marketplace listing; premium cars live in /home only.
+exports.getMarketplaceCars = async(req, res) => {
+    try {
+        const { page = 1, limit = 10 } = req.query;
+        const query = {
+            ...buildCarFilter(req.query),
+            status: 'available',
+            premiumVerified: false,
+        };
+
+        const pageNum = Math.max(1, Number(page));
+        const limitNum = Math.max(1, Number(limit));
+
+        const cars = await Car.find(query)
+            .populate('owner', 'name phone')
+            .sort({ createdAt: -1 })
+            .skip((pageNum - 1) * limitNum)
+            .limit(limitNum);
+
+        const total = await Car.countDocuments(query);
+
+        res.json({
+            success: true,
+            data: cars,
+            pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) },
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

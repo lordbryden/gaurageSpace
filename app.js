@@ -51,10 +51,12 @@ const userRoutes = require("./src/routes/user.route");
 const carRoutes = require("./src/routes/car.route");
 const advertRoutes = require("./src/routes/advert.route");
 const bookingRoutes = require("./src/routes/booking.route");
+const ratingRoutes = require("./src/routes/rating.route");
 
 app.use("/api/users", userRoutes);
 app.use("/api/cars", carRoutes);
 app.use("/api/adverts", advertRoutes);
 app.use("/api/bookings", bookingRoutes);
+app.use("/api/ratings", ratingRoutes);
 
 module.exports = app;

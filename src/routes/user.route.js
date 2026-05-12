@@ -10,6 +10,7 @@ const {
     updateUser,
     deleteUser,
     loginUser,
+    verifyLoginOtp,
     logoutUser,
     resetPassword,
     searchUsers,
@@ -275,7 +276,11 @@ router.put("/:id", updateUser);
  * @swagger
  * /api/users/login:
  *  post:
- *    summary: Login user (returns JWT token for car endpoints)
+ *    summary: Step 1 of login — validates password and issues an OTP
+ *    description: |
+ *      Validates phone + password and returns a 6-digit OTP. In DEV mode the
+ *      OTP is echoed in the response body for testing; in production it would
+ *      be sent via SMS. Confirm the OTP with POST /api/users/verify-otp.
  *    tags: [Users]
  *    requestBody:
  *      required: true
@@ -283,16 +288,41 @@ router.put("/:id", updateUser);
  *        application/json:
  *          schema:
  *            type: object
+ *            required: [phone, password]
  *            properties:
- *              phone:
- *                type: string
- *              password:
- *                type: string
+ *              phone: { type: string }
+ *              password: { type: string }
  *    responses:
  *      '200':
- *        description: Login successful with token
+ *        description: OTP issued (dev mode returns it inline)
+ *      '400':
+ *        description: Invalid credentials
  */
 router.post("/login", loginUser);
+
+/**
+ * @swagger
+ * /api/users/verify-otp:
+ *  post:
+ *    summary: Step 2 of login — confirm OTP, receive a session token
+ *    tags: [Users]
+ *    requestBody:
+ *      required: true
+ *      content:
+ *        application/json:
+ *          schema:
+ *            type: object
+ *            required: [phone, otp]
+ *            properties:
+ *              phone: { type: string }
+ *              otp: { type: string, description: "6-digit code from POST /login" }
+ *    responses:
+ *      '200':
+ *        description: Login successful — returns { token, user }
+ *      '400':
+ *        description: OTP missing, expired, or invalid
+ */
+router.post("/verify-otp", verifyLoginOtp);
 
 /**
  * @swagger
