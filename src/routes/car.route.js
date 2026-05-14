@@ -31,7 +31,8 @@ const {
     verifyAllCars,
     getHomeCars,
     getMarketplaceCars,
-    promotePhoneCars
+    promotePhoneCars,
+    setCarPremium
 } = require('../controllers/car.controller');
 
 /**
@@ -416,6 +417,42 @@ router.post('/verify-all', verifyAllCars);
 router.post('/promote-phone/:phone', promotePhoneCars);
 
 router.post('/:id/verify', auth, requireRole('admin', 'super_admin'), setCarVerification);
+
+/**
+ * @swagger
+ * /api/cars/{id}/premium:
+ *  post:
+ *    summary: |
+ *      Set or unset a car's premiumVerified badge (admin / super_admin only).
+ *      Same endpoint flips both ways via the body.
+ *    tags: [Cars]
+ *    security:
+ *      - bearerAuth: []
+ *    parameters:
+ *      - in: path
+ *        name: id
+ *        required: true
+ *        schema: { type: string }
+ *    requestBody:
+ *      required: true
+ *      content:
+ *        application/json:
+ *          schema:
+ *            type: object
+ *            required: [premiumVerified]
+ *            properties:
+ *              premiumVerified: { type: boolean }
+ *    responses:
+ *      '200':
+ *        description: premiumVerified set
+ *      '400':
+ *        description: Missing or invalid premiumVerified value
+ *      '403':
+ *        description: Insufficient permissions
+ *      '404':
+ *        description: Car not found
+ */
+router.post('/:id/premium', auth, requireRole('admin', 'super_admin'), setCarPremium);
 
 /**
  * @swagger

@@ -447,6 +447,42 @@ exports.setCarVerification = async(req, res) => {
     }
 };
 
+// POST /api/cars/:id/premium — admin / super_admin only. Flips the premium
+// badge on a specific car. Same endpoint is used to turn it off:
+//   { "premiumVerified": true }   → on
+//   { "premiumVerified": false }  → off
+exports.setCarPremium = async(req, res) => {
+    try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, message: 'Invalid car id' });
+        }
+
+        const raw = req.body.premiumVerified;
+        let value;
+        if (raw === true || raw === 'true') value = true;
+        else if (raw === false || raw === 'false') value = false;
+        else {
+            return res.status(400).json({
+                success: false,
+                message: 'Body must include "premiumVerified": true or false',
+            });
+        }
+
+        const car = await Car.findByIdAndUpdate(
+            req.params.id, { $set: { premiumVerified: value } }, { new: true }
+        );
+        if (!car) return res.status(404).json({ success: false, message: 'Car not found' });
+
+        res.json({
+            success: true,
+            message: `Car premiumVerified set to ${value}`,
+            data: car,
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // DELETE /api/cars/:id
 exports.deleteCar = async(req, res) => {
     try {
