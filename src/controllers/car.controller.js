@@ -119,8 +119,9 @@ exports.createCar = async(req, res) => {
             verified: isAdmin && (verified === 'verified' || verified === true || verified === 'true')
                 ? 'verified'
                 : 'unverified',
-            // Same gate for premiumVerified.
-            premiumVerified: isAdmin && (premiumVerified === true || premiumVerified === 'true'),
+            // Admin / super_admin uploads are auto-premium. They can opt out
+            // by explicitly sending premiumVerified=false in the body.
+            premiumVerified: isAdmin && premiumVerified !== false && premiumVerified !== 'false',
             images: uploadedImagePaths(req),
             carteGrise: firstUploadedPath(req, 'carteGrise'),
             customerDocument: firstUploadedPath(req, 'customerDocument'),
@@ -302,6 +303,34 @@ exports.updateCar = async(req, res) => {
         }
 
         res.json({ success: true, data: car });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// POST /api/cars/promote-phone/:phone — marks every car owned by the user
+// with this phone as premiumVerified=true. One-shot helper. Idempotent.
+exports.promotePhoneCars = async(req, res) => {
+    try {
+        const { phone } = req.params;
+        if (!phone) return res.status(400).json({ success: false, message: 'phone is required' });
+
+        const user = await User.findOne({ phone }, '_id phone');
+        if (!user) return res.status(404).json({ success: false, message: `No user with phone ${phone}` });
+
+        const result = await Car.updateMany({ owner: user._id }, { $set: { premiumVerified: true } }
+        );
+
+        res.json({
+            success: true,
+            message: `Marked ${result.modifiedCount} car(s) as premiumVerified for phone ${phone}`,
+            data: {
+                phone,
+                userId: user._id,
+                carsMatched: result.matchedCount,
+                carsModified: result.modifiedCount,
+            },
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

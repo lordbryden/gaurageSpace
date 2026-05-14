@@ -30,7 +30,8 @@ const {
     setCarVerification,
     verifyAllCars,
     getHomeCars,
-    getMarketplaceCars
+    getMarketplaceCars,
+    promotePhoneCars
 } = require('../controllers/car.controller');
 
 /**
@@ -392,6 +393,27 @@ router.delete('/:id', auth, deleteCar);
  */
 // Registered before /:id/verify so the literal path always wins.
 router.post('/verify-all', verifyAllCars);
+
+/**
+ * @swagger
+ * /api/cars/promote-phone/{phone}:
+ *  post:
+ *    summary: |
+ *      [One-off] Marks every car owned by the user with this phone as premiumVerified=true.
+ *      Idempotent. No auth (dev helper).
+ *    tags: [Cars]
+ *    parameters:
+ *      - in: path
+ *        name: phone
+ *        required: true
+ *        schema: { type: string }
+ *    responses:
+ *      '200':
+ *        description: Cars promoted
+ *      '404':
+ *        description: No user with that phone
+ */
+router.post('/promote-phone/:phone', promotePhoneCars);
 
 router.post('/:id/verify', auth, requireRole('admin', 'super_admin'), setCarVerification);
 

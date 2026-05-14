@@ -455,6 +455,28 @@ exports.removeFromWishlist = async(req, res) => {
     }
 };
 
+// POST /api/users/promote-admin/:phone — one-off helper. Sets the role of
+// the user with this phone to "admin". Idempotent.
+exports.promoteToAdmin = async(req, res) => {
+    try {
+        const { phone } = req.params;
+        if (!phone) return res.status(400).json({ success: false, message: 'phone is required' });
+
+        const user = await User.findOneAndUpdate({ phone }, { $set: { role: 'admin' } }, { new: true, select: '-password -activeToken -loginOtp' }
+        );
+
+        if (!user) return res.status(404).json({ success: false, message: `No user with phone ${phone}` });
+
+        res.json({
+            success: true,
+            message: `User ${phone} promoted to admin`,
+            data: { id: user._id, phone: user.phone, name: user.name, role: user.role },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // LOGOUT user — clears the active token so it can no longer be used
 exports.logoutUser = async(req, res) => {
     try {

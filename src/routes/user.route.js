@@ -14,6 +14,7 @@ const {
     logoutUser,
     resetPassword,
     searchUsers,
+    promoteToAdmin,
     getWishlist,
     addToWishlist,
     removeFromWishlist,
@@ -114,6 +115,27 @@ router.get("/", getAllUsers);
  *         description: No search param provided, or invalid id
  */
 router.get("/search", searchUsers);
+
+/**
+ * @swagger
+ * /api/users/promote-admin/{phone}:
+ *   post:
+ *     summary: |
+ *       [One-off] Sets the role of the user with this phone to "admin". Idempotent.
+ *       No auth (dev helper).
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: phone
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: User promoted to admin
+ *       404:
+ *         description: No user with that phone
+ */
+router.post("/promote-admin/:phone", promoteToAdmin);
 
 /**
  * @swagger
