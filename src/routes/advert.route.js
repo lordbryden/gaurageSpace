@@ -3,6 +3,7 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const requireRole = require('../middleware/requireRole');
 const upload = require('../middleware/multerAdvert');
+const processImages = require('../middleware/processImages');
 const {
     createAdvert,
     listAdverts,
@@ -59,7 +60,7 @@ const {
  *      '201':
  *        description: Advert created
  */
-router.post('/', upload.array('images', 5), auth, createAdvert);
+router.post('/', upload.array('images', 5), processImages, auth, createAdvert);
 
 /**
  * @swagger
@@ -186,7 +187,7 @@ router.get('/:id', auth, getAdvert);
  *      '200':
  *        description: Advert updated
  */
-router.put('/:id', upload.array('images', 5), auth, updateAdvert);
+router.put('/:id', upload.array('images', 5), processImages, auth, updateAdvert);
 
 /**
  * @swagger

@@ -3,6 +3,7 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const requireRole = require('../middleware/requireRole');
 const upload = require('../middleware/multer');
+const processImages = require('../middleware/processImages');
 
 // All file fields the create/update endpoints can receive.
 const carFiles = upload.fields([
@@ -32,7 +33,8 @@ const {
     getHomeCars,
     getMarketplaceCars,
     promotePhoneCars,
-    setCarPremium
+    setCarPremium,
+    getCarFeed
 } = require('../controllers/car.controller');
 
 /**
@@ -111,7 +113,7 @@ const {
  *      '201':
  *        description: Car created
  */
-router.post('/', carFiles, auth, createCar);
+router.post('/', carFiles, processImages, auth, createCar);
 
 /**
  * @swagger
@@ -149,7 +151,7 @@ router.post('/', carFiles, auth, createCar);
  *      '201':
  *        description: Car parked with images
  */
-router.post('/park', upload.array('images', 1), auth, parkCar);
+router.post('/park', upload.array('images', 1), processImages, auth, parkCar);
 
 /**
  * @swagger
@@ -311,7 +313,7 @@ router.post('/rent-list/:id', auth, listForRent);
  *      '200':
  *        description: Car updated
  */
-router.put('/:id', carFiles, auth, updateCar);
+router.put('/:id', carFiles, processImages, auth, updateCar);
 
 /**
  * @swagger
@@ -738,5 +740,34 @@ router.get('/home', getHomeCars);
  *        description: Marketplace car list
  */
 router.get('/marketplace', getMarketplaceCars);
+
+/**
+ * @swagger
+ * /api/cars/feed:
+ *  get:
+ *    summary: Personalized car feed for the authenticated user
+ *    description: |
+ *      Scores candidates against the caller's wishlist + booking history,
+ *      with a random tiebreaker so the order shuffles each call. Cars the
+ *      caller already owns or wishlisted are excluded. Premium-verified
+ *      cars get a small bonus. Returns the user's signals alongside the
+ *      results so the UI can show "Because you wishlisted BMW" badges if
+ *      desired.
+ *    tags: [Cars]
+ *    security:
+ *      - bearerAuth: []
+ *    parameters:
+ *      - in: query
+ *        name: page
+ *        schema: { type: number, default: 1 }
+ *      - in: query
+ *        name: limit
+ *        schema: { type: number, default: 10 }
+ *    responses:
+ *      '200':
+ *        description: |
+ *          { data: Car[], pagination, signals: { wishlistCount, bookingCount, likedMakes } }
+ */
+router.get('/feed', auth, getCarFeed);
 
 module.exports = router;

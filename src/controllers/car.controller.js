@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Car = require('../models/car.model');
 const User = require('../models/user.model');
+const Booking = require('../models/booking.model');
 const { runCarVerification } = require('../services/carVerifier');
 
 // Escape user-supplied strings before dropping them into a regex so odd
@@ -582,6 +583,90 @@ exports.getMarketplaceCars = async(req, res) => {
             success: true,
             data: cars,
             pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/cars/feed — personalized car feed. Scores candidates against the
+// caller's wishlist + booking history, with a random tiebreaker so the order
+// shuffles each call. Cars the caller already owns or has wishlisted are
+// excluded so the feed surfaces *new* recommendations.
+exports.getCarFeed = async(req, res) => {
+    try {
+        const userId = req.user._id;
+        const { page = 1, limit = 10 } = req.query;
+        const pageNum = Math.max(1, Number(page));
+        const limitNum = Math.max(1, Number(limit));
+
+        // Pull signals: wishlisted cars + recent bookings. Both are populated
+        // so we can read their attributes (make, bodyType, fuelType).
+        const user = await User.findById(userId, 'wishlist').populate('wishlist');
+        const wishlistCars = user ? user.wishlist || [] : [];
+
+        const recentBookings = await Booking.find({ user: userId })
+            .populate('car')
+            .sort({ createdAt: -1 })
+            .limit(20);
+        const bookedCars = recentBookings.map((b) => b.car).filter(Boolean);
+
+        // Aggregate "liked" attributes — lowercase for case-insensitive match.
+        const likedMakes = new Set();
+        const likedBodyTypes = new Set();
+        const likedFuelTypes = new Set();
+        for (const c of [...wishlistCars, ...bookedCars]) {
+            if (c.make) likedMakes.add(String(c.make).toLowerCase());
+            if (c.bodyType) likedBodyTypes.add(String(c.bodyType).toLowerCase());
+            if (c.fuelType) likedFuelTypes.add(String(c.fuelType).toLowerCase());
+        }
+
+        const wishlistIds = wishlistCars.map((c) => c._id);
+        const match = {
+            status: 'available',
+            owner: { $ne: new mongoose.Types.ObjectId(userId) },
+            _id: { $nin: wishlistIds },
+        };
+
+        const pipeline = [
+            { $match: match },
+            {
+                $addFields: {
+                    _score: {
+                        $add: [
+                            { $cond: [{ $in: [{ $toLower: { $ifNull: ['$make', ''] } }, [...likedMakes]] }, 10, 0] },
+                            { $cond: [{ $in: [{ $toLower: { $ifNull: ['$bodyType', ''] } }, [...likedBodyTypes]] }, 5, 0] },
+                            { $cond: [{ $in: [{ $toLower: { $ifNull: ['$fuelType', ''] } }, [...likedFuelTypes]] }, 3, 0] },
+                            // Random tiebreaker (0..5). Without signals this
+                            // is the only score, so users with no history
+                            // still get a varied feed each call.
+                            { $multiply: [{ $rand: {} }, 5] },
+                            // Small bonus for premiumVerified cars so they
+                            // surface slightly more often.
+                            { $cond: ['$premiumVerified', 2, 0] },
+                        ],
+                    },
+                },
+            },
+            { $sort: { _score: -1, createdAt: -1 } },
+            { $skip: (pageNum - 1) * limitNum },
+            { $limit: limitNum },
+        ];
+
+        const cars = await Car.aggregate(pipeline);
+        await Car.populate(cars, [{ path: 'owner', select: 'name phone' }]);
+
+        const total = await Car.countDocuments(match);
+
+        res.json({
+            success: true,
+            data: cars,
+            pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) },
+            signals: {
+                wishlistCount: wishlistCars.length,
+                bookingCount: bookedCars.length,
+                likedMakes: [...likedMakes],
+            },
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
