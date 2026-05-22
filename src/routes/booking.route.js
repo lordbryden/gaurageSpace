@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
+const requireRole = require('../middleware/requireRole');
 const {
     createBooking,
     listMyBookings,
@@ -8,7 +9,8 @@ const {
     getBooking,
     updateBooking,
     cancelBooking,
-    deleteBooking
+    deleteBooking,
+    listAllBookings
 } = require('../controllers/booking.controller');
 
 /**
@@ -92,6 +94,44 @@ router.get('/', auth, listMyBookings);
  *           { total, pending, active, completed, cancelled, totalSpent }
  */
 router.get('/stats', auth, getMyStats);
+
+/**
+ * @swagger
+ * /api/bookings/all:
+ *   get:
+ *     summary: Platform-wide bookings list (admin / super_admin only)
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [pending, active, completed, cancelled] }
+ *       - in: query
+ *         name: userId
+ *         schema: { type: string }
+ *       - in: query
+ *         name: carId
+ *         schema: { type: string }
+ *       - in: query
+ *         name: from
+ *         schema: { type: string, format: date-time }
+ *       - in: query
+ *         name: to
+ *         schema: { type: string, format: date-time }
+ *       - in: query
+ *         name: page
+ *         schema: { type: number, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: number, default: 20 }
+ *     responses:
+ *       '200':
+ *         description: All matching bookings (user + car populated)
+ *       '403':
+ *         description: Insufficient permissions
+ */
+router.get('/all', auth, requireRole('admin', 'super_admin'), listAllBookings);
 
 /**
  * @swagger

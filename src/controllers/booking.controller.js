@@ -273,3 +273,49 @@ exports.deleteBooking = async(req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// GET /api/bookings/all — admin / super_admin. Platform-wide bookings list.
+// Same filters as the user-scoped /api/bookings list (status, page, limit),
+// plus userId and carId for targeted lookups.
+exports.listAllBookings = async(req, res) => {
+    try {
+        const { status, userId, carId, from, to, page = 1, limit = 20 } = req.query;
+
+        const query = {};
+        const statusQ = statusToQuery(status);
+        if (statusQ) Object.assign(query, statusQ);
+        if (userId) query.user = userId;
+        if (carId) query.car = carId;
+        if (from || to) {
+            query.startDate = {};
+            if (from) query.startDate.$gte = new Date(from);
+            if (to) query.startDate.$lte = new Date(to);
+        }
+
+        const pageNum = Math.max(1, Number(page));
+        const limitNum = Math.max(1, Number(limit));
+
+        const [bookings, total] = await Promise.all([
+            Booking.find(query)
+            .populate('user', 'name phone')
+            .populate(carPopulate)
+            .sort({ startDate: -1 })
+            .skip((pageNum - 1) * limitNum)
+            .limit(limitNum),
+            Booking.countDocuments(query),
+        ]);
+
+        res.json({
+            success: true,
+            data: bookings,
+            pagination: {
+                page: pageNum,
+                limit: limitNum,
+                total,
+                pages: Math.ceil(total / limitNum),
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

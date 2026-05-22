@@ -4,6 +4,10 @@ const { validationResult } = require("express-validator");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
+const { logAudit } = require("../utils/auditLog");
+
+const VALID_ROLES = ['regular', 'merchant', 'admin', 'super_admin'];
+const VALID_USER_VERIFICATION = ['unverified', 'pending', 'verified'];
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -483,6 +487,122 @@ exports.logoutUser = async(req, res) => {
         req.user.activeToken = null;
         await req.user.save();
         res.status(200).json({ success: true, message: "Logged out" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// POST /api/users/:id/verify — admin / super_admin. Sets user.verified to
+// one of: 'unverified' | 'pending' | 'verified'.
+exports.setUserVerification = async(req, res) => {
+    try {
+        const { id } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid user id' });
+        }
+
+        const { verified } = req.body;
+        if (!VALID_USER_VERIFICATION.includes(verified)) {
+            return res.status(400).json({
+                success: false,
+                message: `verified must be one of: ${VALID_USER_VERIFICATION.join(', ')}`,
+            });
+        }
+
+        const user = await User.findByIdAndUpdate(
+            id, { verified }, { new: true, select: '-password -activeToken' }
+        );
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        await logAudit({
+            actor: req.user,
+            action: 'user.verify.set',
+            target: { type: 'user', id: String(user._id), label: user.phone },
+            meta: { verified },
+        });
+
+        res.json({
+            success: true,
+            message: `User verification set to ${verified}`,
+            data: user,
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// POST /api/users/:id/force-logout — admin / super_admin. Clears the user's
+// activeToken so their current session stops working on the next request.
+exports.forceLogoutUser = async(req, res) => {
+    try {
+        const { id } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid user id' });
+        }
+
+        const user = await User.findByIdAndUpdate(
+            id, { activeToken: null }, { new: true, select: '-password -activeToken' }
+        );
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        await logAudit({
+            actor: req.user,
+            action: 'user.force-logout',
+            target: { type: 'user', id: String(user._id), label: user.phone },
+            meta: {},
+        });
+
+        res.json({ success: true, message: 'User session invalidated', data: user });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// POST /api/users/:id/role — admin / super_admin. Sets the user's role.
+// Promoting to super_admin OR changing an existing super_admin requires the
+// caller themselves be super_admin (admins can't escalate or sideline peers).
+exports.setUserRole = async(req, res) => {
+    try {
+        const { id } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid user id' });
+        }
+
+        const { role } = req.body;
+        if (!VALID_ROLES.includes(role)) {
+            return res.status(400).json({
+                success: false,
+                message: `role must be one of: ${VALID_ROLES.join(', ')}`,
+            });
+        }
+
+        const target = await User.findById(id);
+        if (!target) return res.status(404).json({ success: false, message: 'User not found' });
+
+        const callerIsSuper = req.user.role === 'super_admin';
+        if (role === 'super_admin' && !callerIsSuper) {
+            return res.status(403).json({ success: false, message: 'Only super_admin can promote to super_admin' });
+        }
+        if (target.role === 'super_admin' && !callerIsSuper) {
+            return res.status(403).json({ success: false, message: 'Only super_admin can change another super_admin' });
+        }
+
+        const previousRole = target.role;
+        target.role = role;
+        await target.save();
+
+        await logAudit({
+            actor: req.user,
+            action: 'user.role.set',
+            target: { type: 'user', id: String(target._id), label: target.phone },
+            meta: { previousRole, newRole: role },
+        });
+
+        res.json({
+            success: true,
+            message: `Role changed from ${previousRole} to ${role}`,
+            data: { id: target._id, name: target.name, phone: target.phone, role: target.role },
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

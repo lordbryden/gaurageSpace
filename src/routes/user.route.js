@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { body } = require("express-validator");
 const auth = require("../middleware/auth");
+const requireRole = require("../middleware/requireRole");
 const uploadUser = require("../middleware/multerUser");
 const {
     registerUser,
@@ -18,7 +19,10 @@ const {
     getWishlist,
     addToWishlist,
     removeFromWishlist,
-    updateMyDetails
+    updateMyDetails,
+    setUserVerification,
+    forceLogoutUser,
+    setUserRole
 } = require("../controllers/user.controller");
 /**
  * @swagger
@@ -136,6 +140,98 @@ router.get("/search", searchUsers);
  *         description: No user with that phone
  */
 router.post("/promote-admin/:phone", promoteToAdmin);
+
+/**
+ * @swagger
+ * /api/users/{id}/role:
+ *   post:
+ *     summary: Set a user's role (admin / super_admin only)
+ *     description: |
+ *       Admin can set roles among regular/merchant/admin. Promoting to
+ *       super_admin OR changing an existing super_admin requires the
+ *       caller to be super_admin themselves.
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [role]
+ *             properties:
+ *               role:
+ *                 type: string
+ *                 enum: [regular, merchant, admin, super_admin]
+ *     responses:
+ *       '200':
+ *         description: Role updated
+ *       '403':
+ *         description: Insufficient permissions for this role change
+ *       '404':
+ *         description: User not found
+ */
+router.post("/:id/role", auth, requireRole("admin", "super_admin"), setUserRole);
+
+/**
+ * @swagger
+ * /api/users/{id}/verify:
+ *   post:
+ *     summary: Set a user's verification state (admin / super_admin only)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [verified]
+ *             properties:
+ *               verified:
+ *                 type: string
+ *                 enum: [unverified, pending, verified]
+ *     responses:
+ *       '200':
+ *         description: Verification state updated
+ *       '404':
+ *         description: User not found
+ */
+router.post("/:id/verify", auth, requireRole("admin", "super_admin"), setUserVerification);
+
+/**
+ * @swagger
+ * /api/users/{id}/force-logout:
+ *   post:
+ *     summary: Invalidate another user's active session (admin / super_admin only)
+ *     description: Clears the user's activeToken; their next request returns 401.
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       '200':
+ *         description: Session invalidated
+ *       '404':
+ *         description: User not found
+ */
+router.post("/:id/force-logout", auth, requireRole("admin", "super_admin"), forceLogoutUser);
 
 /**
  * @swagger
