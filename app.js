@@ -9,7 +9,23 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('uploads'));
+app.use(express.static('uploads', {
+    maxAge: '1y',
+    immutable: true,
+    setHeaders: (res, filePath) => {
+        const relativePath = filePath.replace(/\\/g, '/');
+        const isPublicVehicleImage = /\/(cars|adverts)\//.test(relativePath);
+        const isImage = /\.(avif|gif|jpe?g|png|webp)$/i.test(relativePath);
+
+        // Vehicle images have unique filenames, so these URLs are immutable.
+        // User uploads and documents must not be persisted in the browser cache.
+        if (isPublicVehicleImage && isImage) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else {
+            res.setHeader('Cache-Control', 'no-cache');
+        }
+    },
+}));
 
 // Swagger Config
 const options = {
