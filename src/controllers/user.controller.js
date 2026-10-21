@@ -266,6 +266,26 @@ exports.verifyLoginOtp = async(req, res) => {
     }
 };
 
+// FORGOT password — issue the same short-lived OTP used by login. In this
+// testing build the code is returned in the response instead of being SMSed.
+exports.forgotPassword = async(req, res) => {
+    try {
+        const { phone } = req.body;
+        if (!phone) return res.status(400).json({ success: false, message: "Phone is required" });
+
+        const user = await User.findOne({ phone });
+        if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        user.loginOtp = { code, expiresAt: new Date(Date.now() + 10 * 60 * 1000) };
+        await user.save();
+
+        res.status(200).json({ success: true, message: "Password reset code generated.", phone: user.phone, otp: code, expiresInSeconds: 600 });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // RESET password — OTP is verified on the frontend, so here we only accept
 // the new password and update it. Clearing activeToken logs out any device
 // that was still signed in with the old credentials.

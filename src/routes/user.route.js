@@ -11,6 +11,7 @@ const {
     updateUser,
     deleteUser,
     loginUser,
+    forgotPassword,
     verifyLoginOtp,
     logoutUser,
     resetPassword,
@@ -421,6 +422,29 @@ router.put("/:id", updateUser);
  *        description: Invalid credentials
  */
 router.post("/login", loginUser);
+
+/**
+ * @swagger
+ * /api/users/forgot-password:
+ *   post:
+ *     summary: Issue a password reset OTP (echoed in development/testing)
+ *     tags: [Users]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [phone]
+ *             properties:
+ *               phone: { type: string }
+ *     responses:
+ *       '200':
+ *         description: OTP issued; development mode returns it inline
+ *       '404':
+ *         description: User not found
+ */
+router.post("/forgot-password", forgotPassword);
 
 /**
  * @swagger
